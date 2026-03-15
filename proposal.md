@@ -35,7 +35,7 @@ The following are the methods we will consider:
 - **Deep Learning Based:** MLP, WaveNet, WaveRNN
 
 ### Portfolio Creation:
-To start off we will start by using the predicted return and variance to produce the portfolio with highest sharpe ratio and explore other methods.
+To start off we will start by using the predicted return and variance to produce the portfolio with theoretically highest sharpe ratio by mean-variance optimization and explore other methods.
 
 ### Evaluation Metrics/Backtesting
 The following evaluation metrics will be used:
