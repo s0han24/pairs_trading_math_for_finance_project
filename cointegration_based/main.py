@@ -10,6 +10,8 @@ from backtest.backtester import compute_returns
 
 import matplotlib.pyplot as plt
 
+from backtest.metrics import sharpe_ratio, max_drawdown
+
 
 prices = download_prices(NIFTY100)
 
@@ -28,8 +30,10 @@ z = zscore(spread)
 
 position = generate_positions(z)
 
-equity = compute_returns(y, x, beta, position)
+equity, returns = compute_returns(y, x, beta, position)
+
+print('Max drawdown:', max_drawdown(equity))
+print('Sharpe ratio:', sharpe_ratio(returns))
 
 equity.plot()
-
 plt.show()

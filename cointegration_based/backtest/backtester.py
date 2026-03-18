@@ -6,4 +6,4 @@ def compute_returns(y, x, beta, position):
 
     equity = (1 + strategy_returns).cumprod()
 
-    return equity
+    return equity, strategy_returns

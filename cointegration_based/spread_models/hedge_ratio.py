@@ -7,4 +7,4 @@ def estimate_hedge_ratio(y, x):
     x = add_constant(x)
     model = OLS(y, x).fit()
 
-    return model.params['LT.NS']
+    return model.params.iloc[1]
