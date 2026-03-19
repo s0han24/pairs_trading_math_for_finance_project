@@ -1,3 +1,5 @@
+# Not a real backtest, just a simple test to see if the returns are being computed correctly
+
 def compute_returns(y, x, beta, position):
 
     returns = y.pct_change() - beta * x.pct_change()

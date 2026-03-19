@@ -1,1 +1,21 @@
 # This module contains functions for filtering pairs before expensive cointegration tests. This is useful when the universe of stocks is large and we want to reduce the number of pairs to test for cointegration.
+from itertools import combinations
+import numpy as np
+
+
+def filter_pairs_by_correlation(price_df, threshold=0.8, n=10):
+    corr = np.corrcoef(price_df.T)
+    pairs = []
+    for i, j in combinations(range(len(price_df.columns)), 2):
+        if corr[i, j] > threshold:
+            pairs.append((price_df.columns[i], price_df.columns[j], corr[i, j]))
+    used = set()
+    result = []
+    pairs = sorted(pairs, key=lambda x: x[2], reverse=True)
+    for s1, s2, c in pairs:
+        if s1 not in used and s2 not in used:
+            result.append((s1, s2, c))
+            used.add(s1)
+            used.add(s2)
+    return result[:n]
+        

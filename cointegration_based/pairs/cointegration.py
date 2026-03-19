@@ -1,5 +1,6 @@
 from itertools import combinations
 from statsmodels.tsa.stattools import coint
+from .filtering import filter_pairs_by_correlation
 
 
 def find_cointegrated_pairs(price_df, pvalue_threshold=0.05):
@@ -16,6 +17,22 @@ def find_cointegrated_pairs(price_df, pvalue_threshold=0.05):
     pairs = sorted(pairs, key=lambda x: x[2])
 
     return pairs
+
+def find_top_k_cointegrated_pairs_with_filtering(price_df, pvalue_threshold=0.05, corr_threshold=0.8, n=10, k=5):
+    filtered_pairs = filter_pairs_by_correlation(price_df, threshold=corr_threshold, n=n)
+
+    pairs = []
+
+    for s1, s2, corr in filtered_pairs:
+
+        score, pvalue, _ = coint(price_df[s1], price_df[s2])
+
+        if pvalue > pvalue_threshold:
+            pairs.append((s1, s2, corr, pvalue))
+
+    pairs = sorted(pairs, key=lambda x: x[2], reverse=True)
+
+    return pairs[:k]
 
 def get_top_k_pairs(pairs, k=5):
     result = []
