@@ -3,8 +3,8 @@ from itertools import combinations
 import numpy as np
 
 
-def filter_pairs_by_correlation(price_df, threshold=0.8, n=10):
-    corr = np.corrcoef(price_df.T)
+def filter_pairs_by_correlation(price_df, threshold=0.8, n=10, corr_func=np.corrcoef):
+    corr = corr_func(price_df.T)
     pairs = []
     for i, j in combinations(range(len(price_df.columns)), 2):
         if corr[i, j] > threshold:
