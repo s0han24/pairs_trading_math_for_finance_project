@@ -1,0 +1,1 @@
+# This module contains functions for filtering pairs before expensive cointegration tests. This is useful when the universe of stocks is large and we want to reduce the number of pairs to test for cointegration.

@@ -1,4 +1,4 @@
-from config.universe import NIFTY100
+from config.universe import NIFTY100_small, NIFTY50
 from data.downloader import download_prices
 from pairs.cointegration import find_cointegrated_pairs
 
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from backtest.metrics import sharpe_ratio, max_drawdown
 
 
-prices = download_prices(NIFTY100)
+prices = download_prices(NIFTY50)
 
 pairs = find_cointegrated_pairs(prices)
 
