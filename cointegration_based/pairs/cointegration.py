@@ -11,7 +11,7 @@ def find_cointegrated_pairs(price_df, pvalue_threshold=0.05):
 
         score, pvalue, _ = coint(price_df[s1], price_df[s2])
 
-        if pvalue > pvalue_threshold:
+        if pvalue < pvalue_threshold:
             pairs.append((s1, s2, pvalue))
 
     pairs = sorted(pairs, key=lambda x: x[2])
@@ -27,12 +27,12 @@ def find_top_k_cointegrated_pairs_with_filtering(price_df, pvalue_threshold=0.05
 
         score, pvalue, _ = coint(price_df[s1], price_df[s2])
 
-        if pvalue > pvalue_threshold:
+        if pvalue < pvalue_threshold:
             pairs.append((s1, s2, corr, pvalue))
     if sort_by_corr:
         pairs = sorted(pairs, key=lambda x: x[2], reverse=True)
     else:
-        pairs = sorted(pairs, key=lambda x: x[3], reverse=True)
+        pairs = sorted(pairs, key=lambda x: x[3], reverse=False)
 
     return pairs[:k]
 

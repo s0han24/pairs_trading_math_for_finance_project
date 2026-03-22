@@ -12,10 +12,11 @@ def filter_pairs_by_correlation(price_df, threshold=0.8, n=10, corr_func=np.corr
     used = set()
     result = []
     pairs = sorted(pairs, key=lambda x: x[2], reverse=True)
-    for s1, s2, c in pairs:
-        if s1 not in used and s2 not in used:
-            result.append((s1, s2, c))
-            used.add(s1)
-            used.add(s2)
-    return result[:n]
+    # for s1, s2, c in pairs:
+    #     if s1 not in used and s2 not in used:
+    #         result.append((s1, s2, c))
+    #         used.add(s1)
+    #         used.add(s2)
+    # return result[:n]
+    return pairs[:n]
         
