@@ -1,40 +1,74 @@
 from itertools import combinations
 from statsmodels.tsa.stattools import coint
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
+import numpy as np
+
 from .filtering import filter_pairs_by_correlation
+from config.settings import COINT_TEST_METHOD
+
+
+def _get_johansen_pvalue(johansen_result):
+    """
+    Extracts the p-value from the Johansen test result.
+    It returns the p-value for the trace statistic with 0 cointegrating equations.
+    """
+    # The trace statistic and critical values are in the lr1 and cvt attributes
+    trace_stat = johansen_result.lr1[0]
+    crit_values = johansen_result.cvt[0]  # 90%, 95%, 99%
+
+    if trace_stat > crit_values[2]:  # more than 99% confidence
+        return 0.00
+    elif trace_stat > crit_values[1]:  # more than 95% confidence
+        return 0.05
+    elif trace_stat > crit_values[0]:  # more than 90% confidence
+        return 0.10
+    else:
+        return 1.0
 
 
 def find_cointegrated_pairs(price_df, pvalue_threshold=0.05):
-
     pairs = []
-
     for s1, s2 in combinations(price_df.columns, 2):
-
-        score, pvalue, _ = coint(price_df[s1], price_df[s2])
+        if COINT_TEST_METHOD == 'engle-granger':
+            _, pvalue, _ = coint(price_df[s1], price_df[s2])
+        elif COINT_TEST_METHOD == 'johansen':
+            df = price_df[[s1, s2]]
+            johansen_result = coint_johansen(df, det_order=0, k_ar_diff=1)
+            pvalue = _get_johansen_pvalue(johansen_result)
+        else:
+            raise ValueError("Invalid cointegration test method in settings.")
 
         if pvalue < pvalue_threshold:
             pairs.append((s1, s2, pvalue))
 
     pairs = sorted(pairs, key=lambda x: x[2])
-
     return pairs
 
+
 def find_top_k_cointegrated_pairs_with_filtering(price_df, pvalue_threshold=0.05, corr_threshold=0.8, n=10, k=5, sort_by_corr=False):
-    filtered_pairs = filter_pairs_by_correlation(price_df, threshold=corr_threshold, n=n)
-
+    filtered_pairs = filter_pairs_by_correlation(
+        price_df, threshold=corr_threshold, n=n)
     pairs = []
-
     for s1, s2, corr in filtered_pairs:
-
-        score, pvalue, _ = coint(price_df[s1], price_df[s2])
+        if COINT_TEST_METHOD == 'engle-granger':
+            _, pvalue, _ = coint(price_df[s1], price_df[s2])
+        elif COINT_TEST_METHOD == 'johansen':
+            df = price_df[[s1, s2]]
+            johansen_result = coint_johansen(df, det_order=0, k_ar_diff=1)
+            pvalue = _get_johansen_pvalue(johansen_result)
+        else:
+            raise ValueError("Invalid cointegration test method in settings.")
 
         if pvalue < pvalue_threshold:
             pairs.append((s1, s2, corr, pvalue))
+
     if sort_by_corr:
         pairs = sorted(pairs, key=lambda x: x[2], reverse=True)
     else:
         pairs = sorted(pairs, key=lambda x: x[3], reverse=False)
 
     return pairs[:k]
+
 
 def get_top_k_pairs(pairs, k=5):
     result = []
