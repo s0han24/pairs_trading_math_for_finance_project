@@ -13,9 +13,9 @@ NIFTY100_small = [
     "HINDUNILVR.NS",
 ]
 
-tickers = pd.read_html('https://ournifty.com/stock-list-in-nse-fo-futures-and-options.html#:~:text=NSE%20F%26O%20Stock%20List%3A%20%20%20%20SL,%20%201000%20%2052%20more%20rows%20')[0]
+tickers = pd.read_csv("pairs_trading_math_for_finance_project/ind_nifty100list.csv")['Symbol'].tolist()
 
-NIFTY50 = tickers.SYMBOL.to_list()
+NIFTY50 = tickers
 
 for i, ticker in enumerate(NIFTY50):
     if ticker.endswith('.NS'):
