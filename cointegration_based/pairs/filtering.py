@@ -7,7 +7,7 @@ from config.settings import CORR_FUNCTION
 corr_functions = {
     'pearson': np.corrcoef,
     'spearman': lambda x: np.corrcoef(np.argsort(x, axis=1)),
-    # spearman is a placeholder, implement properly if needed
+    # spearman is a placeholder, implement properly in a separate file if needed
 }
 
 def filter_pairs_by_correlation(price_df, threshold=0.8, n=10, corr_func=corr_functions.get(CORR_FUNCTION)):

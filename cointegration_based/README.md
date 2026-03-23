@@ -16,12 +16,14 @@ The project is organized into the following modules:
 
 ## Workflow
 
-1.  **Configuration**: In `config/settings.py`, you can configure the cointegration test to be used.
+1.  **Configuration**: In `config/settings.py`, you can configure the following:
+    - the cointegration test
+    - the correlation function used for filtering
 
 2.  **Data Downloading**: The `data/downloader.py` module downloads historical stock prices from Yahoo Finance for a given list of tickers and a specified time period. The data is split into in-sample (for finding pairs) and out-of-sample (for backtesting) sets.
 
 3.  **Pair Selection**:
-    -   The `pairs/filtering.py` module first filters pairs of stocks based on their correlation. This is a quick way to identify pairs that are likely to be cointegrated.
+    -   The `pairs/filtering.py` module first filters pairs of stocks based on their correlation(the correlation method is chosen in `config/settings.py`). This is a quick way to identify pairs that are likely to be cointegrated.
     -   The `pairs/cointegration.py` module then uses the selected cointegration test (Engle-Granger or Johansen) to find pairs of stocks that have a statistically significant long-term relationship. This is configured in `config/settings.py`.
 
 4.  **Spread Modeling**:
@@ -40,11 +42,7 @@ The project is organized into the following modules:
 
 ## How to Run
 
-1.  **Configure the Strategy**: Open `cointegration_based/config/settings.py` and set your desired `COINT_TEST_METHOD`.
-    ```python
-    # Options: 'engle-granger', 'johansen'
-    COINT_TEST_METHOD = 'engle-granger'
-    ```
+1.  **Configure the Strategy**: Open `cointegration_based/config/settings.py` and choose the desired settings, refer to the comments for the available options.
 
 2.  **Execute the Backtest**: Run the main.py file:
     ```bash
