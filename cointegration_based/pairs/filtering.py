@@ -1,13 +1,12 @@
 # This module contains functions for filtering pairs before expensive cointegration tests. This is useful when the universe of stocks is large and we want to reduce the number of pairs to test for cointegration.
 from itertools import combinations
 import numpy as np
-from config.settings import CORR_FUNCTION
-
+from cointegration_based.config.settings import CORR_FUNCTION
+from correlation_statistics.statistics import pearson_correlation, hsic
 
 corr_functions = {
-    'pearson': np.corrcoef,
-    'spearman': lambda x: np.corrcoef(np.argsort(x, axis=1)),
-    # spearman is a placeholder, implement properly in a separate file if needed
+    'pearson': pearson_correlation,
+    'hsic': hsic,
 }
 
 def filter_pairs_by_correlation(price_df, threshold=0.8, n=10, corr_func=corr_functions.get(CORR_FUNCTION)):

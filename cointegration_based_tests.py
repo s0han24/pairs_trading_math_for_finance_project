@@ -1,13 +1,13 @@
-from config.universe import NIFTY100_small, NIFTY50
-from data.downloader import download_prices
-from pairs.cointegration import find_cointegrated_pairs, find_top_k_cointegrated_pairs_with_filtering, get_top_k_pairs
+from cointegration_based.config.universe import NIFTY100_small, NIFTY50
+from cointegration_based.data.downloader import download_prices
+from cointegration_based.pairs.cointegration import find_cointegrated_pairs, find_top_k_cointegrated_pairs_with_filtering, get_top_k_pairs
 
-from spread_models.spread import compute_spread
-from spread_models.zscore import zscore
+from cointegration_based.spread_models.spread import compute_spread
+from cointegration_based.spread_models.zscore import zscore
 
-from strategy.signals import generate_positions
-from backtest.metrics import sharpe_ratio, max_drawdown, compute_returns
-from backtest.backtesting import backtest_pairs
+from cointegration_based.strategy.signals import generate_positions
+from cointegration_based.backtest.metrics import sharpe_ratio, max_drawdown, compute_returns
+from cointegration_based.backtest.backtesting import backtest_pairs
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -59,10 +59,19 @@ def test_coint_methods(prices, prices_ood):
     backtest_pairs(pairs_by_corr, prices_ood)
 
 # During COVID crash, many stocks had very high correlation but were not truly cointegrated. This test checks if our filtering can identify good pairs in such a scenario.
-prices, prices_ood = download_prices(NIFTY50)
-test_coint_methods(prices, prices_ood)
+
+prices_covid, prices_ood_covid = download_prices(NIFTY50, start_in="2018-01-01", end_in="2020-01-01", start_ood="2020-01-01", end_ood="2022-01-01")
+print('Testing on COVID data...')
+test_coint_methods(prices_covid, prices_ood_covid)
 
 # Pre-COVID period (2014-2016) had more stable relationships. This test checks if we can find good pairs and achieve better performance compared to the COVID period.
 # However, many stocks did not exist in 2014, so we may have fewer pairs to work with. This tests the robustness of our method in a different market regime.
-prices, prices_ood = download_prices(NIFTY50, start_in="2014-01-01", end_in="2016-01-01", start_ood="2016-01-01", end_ood="2018-01-01")
-test_coint_methods(prices, prices_ood)
+
+prices_pre_covid, prices_ood_pre_covid = download_prices(NIFTY50, start_in="2014-01-01", end_in="2016-01-01", start_ood="2016-01-01", end_ood="2018-01-01")
+print('Testing on pre-COVID data...')
+test_coint_methods(prices_pre_covid, prices_ood_pre_covid)
+
+# Post-COVID period (2022-2024) had a mix of recovery and volatility. This test checks if our method can adapt to changing market conditions and still find good pairs.
+prices_post_covid, prices_ood_post_covid = download_prices(NIFTY50, start_in="2022-01-01", end_in="2024-01-01", start_ood="2024-01-01", end_ood="2026-01-01")
+print('Testing on post-COVID data...')
+test_coint_methods(prices_post_covid, prices_ood_post_covid)

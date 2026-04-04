@@ -13,7 +13,7 @@ NIFTY100_small = [
     "HINDUNILVR.NS",
 ]
 
-tickers = pd.read_csv("pairs_trading_math_for_finance_project/ind_nifty100list.csv")['Symbol'].tolist()
+tickers = pd.read_csv("ind_nifty100list.csv")['Symbol'].tolist()
 
 NIFTY50 = tickers
 

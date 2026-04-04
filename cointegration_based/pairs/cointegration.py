@@ -4,7 +4,7 @@ from statsmodels.tsa.vector_ar.vecm import coint_johansen
 import numpy as np
 
 from .filtering import filter_pairs_by_correlation
-from config.settings import COINT_TEST_METHOD
+from cointegration_based.config.settings import COINT_TEST_METHOD
 
 
 def _get_johansen_pvalue(johansen_result):

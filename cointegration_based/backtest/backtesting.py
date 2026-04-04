@@ -1,7 +1,7 @@
 from .metrics import sharpe_ratio, max_drawdown, compute_returns
-from spread_models.spread import compute_spread
-from spread_models.zscore import zscore
-from strategy.signals import generate_positions
+from cointegration_based.spread_models.spread import compute_spread
+from cointegration_based.spread_models.zscore import zscore
+from cointegration_based.strategy.signals import generate_positions
 import matplotlib.pyplot as plt
 import numpy as np
 

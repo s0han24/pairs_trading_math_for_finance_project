@@ -1,12 +1,28 @@
-# Pairs Trading Strategy with Cointegration
+# Pairs Trading Strategies
 
-This project implements a pairs trading strategy based on the concept of cointegration. The strategy identifies pairs of stocks whose prices have a long-term, stable relationship and then trades on the short-term deviations from this relationship.
+## Outline:
+The project is organised as follows:
+1. Cointegration based methods: Pairs trading via short selling
+2. Negative correlation based methods: Pairs trading without short selling
+3. Baselines:
+    1. **40-60 portfolio**: 40% in risk free assets and 60% in the index fund
+    2. **Equal Weights**: Equal weights in all assets
+    3. **Greedy**: Invest 100% in the portfolio with highest expected return
+    4. **Market Portfolio**: Invest 100% in the index fund.
 
-## Project Structure
+Note: the universe under consideration is NIFTY100, the corresponding assets and their details are given in `ind_nifty100list.csv`. The list was taken from the 2026 NIFTY100.
+
+## Cointegration based methods
+This code implements a pairs trading strategy based on the concept of cointegration. The strategy identifies pairs of stocks whose prices have a long-term, stable relationship and then trades on the short-term deviations from this relationship.
+
+### Implementation Structure
 
 The project is organized into the following modules:
 
--   **main.py**: The entry point of the project. It orchestrates the entire workflow, from data downloading to backtesting.
+-   **`cointegration_based_tests.py`**: The entry point of the project. It orchestrates the entire workflow, from data downloading to backtesting.
+- **`correlation_statistics/statistics.py`**: Contains correlation statistics for choosing pairs.
+
+In the `cointegration_based` directory, the following modules are present:
 -   **`data/`**: Contains the data downloading module.
 -   **`config/`**: Contains configuration files, including the stock universe (universe.py) and strategy settings (`settings.py`).
 -   **`pairs/`**: Contains modules for finding and filtering cointegrated pairs.
@@ -14,7 +30,7 @@ The project is organized into the following modules:
 -   **`strategy/`**: Contains the trading signal generation module.
 -   **`backtest/`**: Contains modules for backtesting the strategy and calculating performance metrics.
 
-## Workflow
+### Workflow
 
 1.  **Configuration**: In `config/settings.py`, you can configure the following:
     - the cointegration test
@@ -40,7 +56,7 @@ The project is organized into the following modules:
     -   The `backtest/backtesting.py` module backtests the trading strategy on the out-of-sample data.
     -   The `backtest/metrics.py` module calculates performance metrics for the strategy, such as Sharpe ratio, maximum drawdown, and cumulative returns.
 
-## How to Run
+### How to Run
 
 1.  **Configure the Strategy**: Open `cointegration_based/config/settings.py` and choose the desired settings, refer to the comments for the available options.
 
@@ -53,8 +69,9 @@ The main.py file contains two test cases:
 
 1.  **COVID Crash Period**: This test uses data from the COVID-19 crash period to check if the filtering mechanism can identify good pairs in a volatile market.
 2.  **Pre-COVID Period**: This test uses data from a more stable pre-COVID period to see if the strategy can achieve better performance in a different market regime.
+3. **Post-COVID Period**: This test uses data from post-COVID period to see if the strategy can achieve better performance in a different market regime.
 
-## Dependencies
+### Dependencies
 
 The project requires the following Python libraries:
 
