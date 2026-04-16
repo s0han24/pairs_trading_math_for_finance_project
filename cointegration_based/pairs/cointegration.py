@@ -4,7 +4,6 @@ from statsmodels.tsa.vector_ar.vecm import coint_johansen
 import numpy as np
 
 from .filtering import filter_pairs_by_correlation
-from cointegration_based.config.settings import COINT_TEST_METHOD
 
 
 def _get_johansen_pvalue(johansen_result):
@@ -26,12 +25,12 @@ def _get_johansen_pvalue(johansen_result):
         return 1.0
 
 
-def find_cointegrated_pairs(price_df, pvalue_threshold=0.05):
+def find_cointegrated_pairs(price_df, pvalue_threshold=0.05, coint_test_method='engle-granger'):
     pairs = []
     for s1, s2 in combinations(price_df.columns, 2):
-        if COINT_TEST_METHOD == 'engle-granger':
+        if coint_test_method == 'engle-granger':
             _, pvalue, _ = coint(price_df[s1], price_df[s2])
-        elif COINT_TEST_METHOD == 'johansen':
+        elif coint_test_method == 'johansen':
             df = price_df[[s1, s2]]
             johansen_result = coint_johansen(df, det_order=0, k_ar_diff=1)
             pvalue = _get_johansen_pvalue(johansen_result)
@@ -45,14 +44,14 @@ def find_cointegrated_pairs(price_df, pvalue_threshold=0.05):
     return pairs
 
 
-def find_top_k_cointegrated_pairs_with_filtering(price_df, pvalue_threshold=0.05, corr_threshold=0.8, n=10, k=5, sort_by_corr=False):
+def find_top_k_cointegrated_pairs_with_filtering(price_df, pvalue_threshold=0.05, corr_threshold=0.8, n=10, k=5, sort_by_corr=False, coint_test_method='engle-granger', corr_method='pearson'):
     filtered_pairs = filter_pairs_by_correlation(
-        price_df, threshold=corr_threshold, n=n)
+        price_df, threshold=corr_threshold, n=n, corr_method=corr_method)
     pairs = []
     for s1, s2, corr in filtered_pairs:
-        if COINT_TEST_METHOD == 'engle-granger':
+        if coint_test_method == 'engle-granger':
             _, pvalue, _ = coint(price_df[s1], price_df[s2])
-        elif COINT_TEST_METHOD == 'johansen':
+        elif coint_test_method == 'johansen':
             df = price_df[[s1, s2]]
             johansen_result = coint_johansen(df, det_order=0, k_ar_diff=1)
             pvalue = _get_johansen_pvalue(johansen_result)

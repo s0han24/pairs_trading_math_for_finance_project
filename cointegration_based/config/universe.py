@@ -15,10 +15,10 @@ NIFTY100_small = [
 
 tickers = pd.read_csv("ind_nifty100list.csv")['Symbol'].tolist()
 
-NIFTY50 = tickers
+NIFTY100 = tickers
 
-for i, ticker in enumerate(NIFTY50):
+for i, ticker in enumerate(NIFTY100):
     if ticker.endswith('.NS'):
         continue
     else:
-        NIFTY50[i] = ticker + '.NS'
+        NIFTY100[i] = ticker + '.NS'
