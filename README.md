@@ -83,3 +83,6 @@ pip install yfinance pandas numpy statsmodels matplotlib scikit-learn prettytabl
 - Implement more correlation statistics
 - ML or DL based approaches
 - Baselines
+- Extend the cointegration approach to include stochastic modeling based approaches such as:
+    1. Time-varying OU
+    2. Kalman Filter
