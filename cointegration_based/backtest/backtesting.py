@@ -24,7 +24,7 @@ def compute_alpha_beta(strategy_returns, benchmark_returns, risk_free_rate=0.0, 
 def compute_annual_volatility(returns, frequency=252):
     return returns.std() * np.sqrt(frequency)
 
-def backtest_pairs(pairs, prices_ood, total_capital=100.0, plot=False):
+def backtest_pairs(pairs, prices_ood, zscore_method='simple', total_capital=100.0, plot=False):
     k = len(pairs)
     capital_per_pair = total_capital / k
     
@@ -45,7 +45,7 @@ def backtest_pairs(pairs, prices_ood, total_capital=100.0, plot=False):
 
         spread, beta_hr = compute_spread(y, x)
 
-        z = zscore(spread)
+        z = zscore(spread, method=zscore_method)
 
         position = generate_positions(z)
 

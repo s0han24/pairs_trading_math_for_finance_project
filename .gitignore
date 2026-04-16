@@ -1,2 +1,2 @@
-*.pyc
-claude_output/*
+.vscode/
+__pycache__/

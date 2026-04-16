@@ -9,7 +9,7 @@ from cointegration_based.backtest.metrics import sharpe_ratio, max_drawdown
 from cointegration_based.backtest.backtesting import compute_alpha_beta, compute_annual_volatility
 from prettytable import PrettyTable
 
-def run_walk_forward_backtest(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=20, k=5, sort_by_corr=False):
+def run_walk_forward_backtest(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=20, k=5, sort_by_corr=False, zscore_method='simple'):
     
     # 2 years (approx 504 trading days) in sample, 2 years out sample
     # Walk forward windows:
@@ -48,7 +48,8 @@ def run_walk_forward_backtest(prices, total_capital=100.0, method='engle-granger
             pvalue_threshold=0.05,
             corr_threshold=0.8,
             n=n,
-            k=k
+            k=k,            
+            zscore_method=zscore_method
         )
         
         # Fit on training data
@@ -122,7 +123,7 @@ if __name__ == "__main__":
     n = 50  # Number of pairs to keep after correlation filtering
     k = 5   # Number of pairs to trade after cointegration testing
     ''' 
-    The following are to be compared(with both sort_by_corr=False and sort_by_corr=True):
+    The following are to be compared(with both sort_by_corr=False and sort_by_corr=True and zscore_method='simple' and zscore_method='ou'):
     sort_by_corr=False means we take top k pairs based on p-value, sort_by_corr=True means we sort the pairs by correlation after filtering by both correlation and the p-value threshold, and then take top k pairs. This allows us to see the impact of prioritizing correlation among the cointegrated pairs.:
     1. Engle-Granger with Pearson filtering 
     3. Johansen with Pearson filtering 
@@ -131,35 +132,46 @@ if __name__ == "__main__":
     
     print("Starting Walk-Forward Backtest...")
     print('Engle-Granger with Pearson filtering')
-    equity_eg_pearson, metrics_eg_pearson = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False)
-    equity_eg_pearson_sorted, metrics_eg_pearson_sorted = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True)
-    
-    print('Johansen with Pearson filtering')
+    equity_eg_pearson, metrics_eg_pearson = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='simple')
+    equity_eg_pearson_sorted, metrics_eg_pearson_sorted = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='simple')
+    equity_eg_ou, metrics_eg_ou = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='ou')
+    equity_eg_ou_sorted, metrics_eg_ou_sorted = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='ou')
 
-    equity_johansen_pearson, metrics_johansen_pearson = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False)
-    equity_johansen_pearson_sorted, metrics_johansen_pearson_sorted = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True)
-    
-    
+    print('Johansen with Pearson filtering')
+    equity_johansen_pearson, metrics_johansen_pearson = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='simple')
+    equity_johansen_pearson_sorted, metrics_johansen_pearson_sorted = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='simple')
+    equity_johansen_ou, metrics_johansen_ou = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='ou')
+    equity_johansen_ou_sorted, metrics_johansen_ou_sorted = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='ou')
+
+
     equity_dict = {
         'EG-Pearson': equity_eg_pearson,
         'EG-Pearson-Sorted': equity_eg_pearson_sorted,
         'Johansen-Pearson': equity_johansen_pearson,
         'Johansen-Pearson-Sorted': equity_johansen_pearson_sorted,
+        'EG-Pearson-Ou': equity_eg_ou,
+        'EG-Pearson-Ou-Sorted': equity_eg_ou_sorted,
+        'Johansen-Pearson-Ou': equity_johansen_ou,
+        'Johansen-Pearson-Ou-Sorted': equity_johansen_ou_sorted
     }
     
     # Print metrics in a table
     table = PrettyTable()
     table.field_names = ["Strategy", "Final Capital", "Max Drawdown", "Sharpe Ratio", "Alpha", "Beta", "Annual Volatility"]
+    
+    metrics_mapping = {
+        'EG-Pearson': metrics_eg_pearson,
+        'EG-Pearson-Sorted': metrics_eg_pearson_sorted,
+        'Johansen-Pearson': metrics_johansen_pearson,
+        'Johansen-Pearson-Sorted': metrics_johansen_pearson_sorted,
+        'EG-Pearson-Ou': metrics_eg_ou,
+        'EG-Pearson-Ou-Sorted': metrics_eg_ou_sorted,
+        'Johansen-Pearson-Ou': metrics_johansen_ou,
+        'Johansen-Pearson-Ou-Sorted': metrics_johansen_ou_sorted
+    }
+    
     for label, equity in equity_dict.items():
-        metrics = None
-        if label == 'EG-Pearson':
-            metrics = metrics_eg_pearson
-        elif label == 'EG-Pearson-Sorted':
-            metrics = metrics_eg_pearson_sorted
-        elif label == 'Johansen-Pearson':
-            metrics = metrics_johansen_pearson
-        elif label == 'Johansen-Pearson-Sorted':
-            metrics = metrics_johansen_pearson_sorted
+        metrics = metrics_mapping.get(label)
         
         table.add_row([
             label, 

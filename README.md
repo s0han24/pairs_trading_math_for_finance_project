@@ -1,88 +1,85 @@
 # Pairs Trading Strategies
 
-## Outline:
-The project is organised as follows:
-1. Cointegration based methods: Pairs trading via short selling
-2. Negative correlation based methods: Pairs trading without short selling
-3. Baselines:
-    1. **40-60 portfolio**: 40% in risk free assets and 60% in the index fund
-    2. **Equal Weights**: Equal weights in all assets
-    3. **Greedy**: Invest 100% in the portfolio with highest expected return
-    4. **Market Portfolio**: Invest 100% in the index fund.
+This repository currently implements a cointegration-based pairs trading pipeline on the NIFTY100 universe.
 
-Note: the universe under consideration is NIFTY100, the corresponding assets and their details are given in `ind_nifty100list.csv`. The list was taken from the 2026 NIFTY100.
+## Current Scope
 
-## Cointegration based methods
-This code implements a pairs trading strategy based on the concept of cointegration. The strategy identifies pairs of stocks whose prices have a long-term, stable relationship and then trades on the short-term deviations from this relationship.
+Implemented:
+1. Cointegration-based pair selection (Engle-Granger and Johansen)
+2. Correlation pre-filtering (Pearson)
+3. Spread modeling and z-score-based signal generation
+4. Walk-forward backtesting with portfolio metrics
 
-### Implementation Structure
+Planned in the project outline but not implemented in this codebase yet:
+1. Negative-correlation-based strategy variants
+2. Baseline portfolios (40-60, equal-weight, greedy, market-only)
 
-The project is organized into the following modules:
+## Universe
 
--   **`cointegration_based_tests.py`**: The entry point of the project. It orchestrates the entire workflow, from data downloading to backtesting.
-- **`correlation_statistics/statistics.py`**: Contains correlation statistics for choosing pairs.
+The stock universe is NIFTY100. Tickers are read from `ind_nifty100list.csv` in `cointegration_based/config/universe.py`, and `.NS` suffixes are added where needed.
 
-In the `cointegration_based` directory, the following modules are present:
--   **`data/`**: Contains the data downloading module.
--   **`config/`**: Contains configuration files, including the stock universe (universe.py) and strategy settings (`settings.py`).
--   **`pairs/`**: Contains modules for finding and filtering cointegrated pairs.
--   **`spread_models/`**: Contains modules for modeling the spread between pairs.
--   **`strategy/`**: Contains the trading signal generation module.
--   **`backtest/`**: Contains modules for backtesting the strategy and calculating performance metrics.
+## Project Structure
 
-### Workflow
+```text
+pairs_trading_math_for_finance_project/
+├── cointegration_based_tests.py
+├── ind_nifty100list.csv
+├── correlation_statistics/
+│   └── statistics.py
+└── cointegration_based/
+    ├── backtest/
+    │   ├── backtesting.py
+    │   └── metrics.py
+    ├── config/
+    │   └── universe.py
+    ├── data/
+    │   └── downloader.py
+    ├── pairs/
+    │   ├── cointegration.py
+    │   └── filtering.py
+    ├── spread_models/
+    │   ├── hedge_ratio.py
+    │   ├── spread.py
+    │   └── zscore.py
+    └── strategy/
+        ├── pipeline.py
+        └── signals.py
+```
 
-1.  **Configuration**: In `config/settings.py`, you can configure the following:
-    - the cointegration test
-    - the correlation function used for filtering
+## Workflow
 
-2.  **Data Downloading**: The `data/downloader.py` module downloads historical stock prices from Yahoo Finance for a given list of tickers and a specified time period. The data is split into in-sample (for finding pairs) and out-of-sample (for backtesting) sets.
+1. Universe load from `ind_nifty100list.csv`
+2. Price download from Yahoo Finance
+3. Correlation filtering to keep top candidate pairs
+4. Cointegration testing to keep tradable pairs
+5. Spread and z-score computation (`simple` or `ou`)
+6. Signal generation (long/short spread with mean-reversion exits)
+7. Walk-forward backtest and metrics calculation
 
-3.  **Pair Selection**:
-    -   The `pairs/filtering.py` module first filters pairs of stocks based on their correlation(the correlation method is chosen in `config/settings.py`). This is a quick way to identify pairs that are likely to be cointegrated.
-    -   The `pairs/cointegration.py` module then uses the selected cointegration test (Engle-Granger or Johansen) to find pairs of stocks that have a statistically significant long-term relationship. This is configured in `config/settings.py`.
+## How to Run
 
-4.  **Spread Modeling**:
-    -   The `spread_models/hedge_ratio.py` module estimates the hedge ratio (beta) between the two stocks in a cointegrated pair using Ordinary Least Squares (OLS).
-    -   The `spread_models/spread.py` module computes the spread between the two stocks using the estimated hedge ratio. The spread is the difference between the price of one stock and the price of the other stock multiplied by the hedge ratio.
-    -   The `spread_models/zscore.py` module calculates the z-score of the spread. The z-score measures how many standard deviations the current spread is from its moving average.
-
-5.  **Signal Generation**: The `strategy/signals.py` module generates trading signals based on the z-score of the spread.
-    -   When the z-score exceeds a certain positive threshold, it's a signal to short the spread (i.e., sell the first stock and buy the second).
-    -   When the z-score falls below a certain negative threshold, it's a signal to long the spread (i.e., buy the first stock and sell the second).
-    -   When the z-score reverts to zero, the position is closed.
-
-6.  **Backtesting**:
-    -   The `backtest/backtesting.py` module backtests the trading strategy on the out-of-sample data.
-    -   The `backtest/metrics.py` module calculates performance metrics for the strategy, such as Sharpe ratio, maximum drawdown, and cumulative returns.
-
-### How to Run
-
-1.  **Configure the Strategy**: Open `cointegration_based/config/settings.py` and choose the desired settings, refer to the comments for the available options.
-
-2.  **Execute the Backtest**: Run the main.py file:
-    ```bash
-    python main.py
-    ```
-
-The main.py file contains two test cases:
-
-1.  **COVID Crash Period**: This test uses data from the COVID-19 crash period to check if the filtering mechanism can identify good pairs in a volatile market.
-2.  **Pre-COVID Period**: This test uses data from a more stable pre-COVID period to see if the strategy can achieve better performance in a different market regime.
-3. **Post-COVID Period**: This test uses data from post-COVID period to see if the strategy can achieve better performance in a different market regime.
-
-### Dependencies
-
-The project requires the following Python libraries:
-
--   `yfinance`
--   `pandas`
--   `numpy`
--   `statsmodels`
--   `matplotlib`
-
-You can install them using pip:
+Run the main experiment script:
 
 ```bash
-pip install yfinance pandas numpy statsmodels matplotlib
+python cointegration_based_tests.py
 ```
+
+The script performs a walk-forward backtest across rolling train/test windows and compares multiple strategy variants, including:
+1. Engle-Granger vs Johansen
+2. Sorted-by-correlation vs p-value-first selection
+3. `simple` vs `ou` z-score method
+
+It prints a metrics table (final capital, max drawdown, Sharpe, alpha, beta, annual volatility) and plots equity curves.
+
+## Dependencies
+
+Install required packages:
+
+```bash
+pip install yfinance pandas numpy statsmodels matplotlib scikit-learn prettytable
+```
+
+## Future Work
+- Implement more correlation statistics
+- ML or DL based approaches
+- Baselines

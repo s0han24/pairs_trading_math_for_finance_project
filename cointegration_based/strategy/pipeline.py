@@ -6,6 +6,7 @@ class PairsTradingPipeline:
     def __init__(self, 
                  coint_test_method='engle-granger', 
                  corr_method='pearson',
+                 zscore_method='simple',
                  pvalue_threshold=0.05, 
                  corr_threshold=0.8, 
                  n=20, 
@@ -18,7 +19,8 @@ class PairsTradingPipeline:
         self.n = n
         self.k = k
         self.total_capital = total_capital
-        
+        self.zscore_method = zscore_method
+
         self.selected_pairs = []
 
     def fit(self, train_prices, sort_by_corr=False):
@@ -39,4 +41,4 @@ class PairsTradingPipeline:
             print("No pairs selected. Please run fit() first, or try adjusting thresholds.")
             return None, None
             
-        return backtest_pairs(self.selected_pairs, test_prices, total_capital=self.total_capital, plot=plot)
+        return backtest_pairs(self.selected_pairs, test_prices, total_capital=self.total_capital, plot=plot, zscore_method=self.zscore_method)
