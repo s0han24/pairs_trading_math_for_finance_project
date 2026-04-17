@@ -2,7 +2,7 @@ import pandas as pd
 from cointegration_based.pairs.cointegration import find_top_k_cointegrated_pairs_with_filtering
 from cointegration_based.backtest.backtesting import backtest_pairs
 
-class PairsTradingPipeline:
+class CointegrationPipeline:
     def __init__(self, 
                  coint_test_method='engle-granger', 
                  corr_method='pearson',
@@ -11,7 +11,8 @@ class PairsTradingPipeline:
                  corr_threshold=0.8, 
                  n=20, 
                  k=5, 
-                 total_capital=100.0):
+                 total_capital=100.0,
+                 sort_by_corr=False):
         self.coint_test_method = coint_test_method
         self.corr_method = corr_method
         self.pvalue_threshold = pvalue_threshold
@@ -20,17 +21,18 @@ class PairsTradingPipeline:
         self.k = k
         self.total_capital = total_capital
         self.zscore_method = zscore_method
+        self.sort_by_corr = sort_by_corr
 
         self.selected_pairs = []
 
-    def fit(self, train_prices, sort_by_corr=False):
+    def fit(self, train_prices):
         self.selected_pairs = find_top_k_cointegrated_pairs_with_filtering(
             train_prices, 
             pvalue_threshold=self.pvalue_threshold, 
             corr_threshold=self.corr_threshold, 
             n=self.n, 
             k=self.k, 
-            sort_by_corr=sort_by_corr,
+            sort_by_corr=self.sort_by_corr,
             coint_test_method=self.coint_test_method,
             corr_method=self.corr_method
         )
@@ -42,3 +44,4 @@ class PairsTradingPipeline:
             return None, None
             
         return backtest_pairs(self.selected_pairs, test_prices, total_capital=self.total_capital, plot=plot, zscore_method=self.zscore_method)
+

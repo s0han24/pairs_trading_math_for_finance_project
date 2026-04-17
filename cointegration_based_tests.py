@@ -4,7 +4,37 @@ from cointegration_based.backtest.walk_forward_pipeline import run_walk_forward_
 from cointegration_based.data.downloader import download_price_data
 from prettytable import PrettyTable
 
+from cointegration_based.strategy.pipeline import CointegrationPipeline
 
+def run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=20, k=5, sort_by_corr=False, zscore_method='simple', pvalue_threshold=0.05, corr_threshold=0.8):
+    """
+    Run a walk-forward cointegration backtest with configurable pair-selection settings.
+
+    Parameters:
+        prices (pd.DataFrame): Price history indexed by date with symbols as columns.
+        total_capital (float): Initial capital allocated to the strategy.
+        method (str): Cointegration test method (for example, 'engle-granger' or 'johansen').
+        corr_method (str): Correlation method used for pre-filtering pairs.
+        n (int): Number of candidate pairs retained after correlation filtering.
+        k (int): Number of pairs selected for trading after cointegration filtering.
+        sort_by_corr (bool): If True, rank qualified pairs by correlation instead of p-value.
+        zscore_method (str): Z-score model used by the backtest engine.
+        pvalue_threshold (float): Maximum p-value allowed for cointegrated pair selection.
+        corr_threshold (float): Minimum correlation threshold for pair pre-filtering.
+    """
+    
+    pipeline = CointegrationPipeline(
+        coint_test_method=method,
+        corr_method=corr_method,
+        pvalue_threshold=pvalue_threshold,
+        corr_threshold=corr_threshold,
+        n=n,
+        k=k,
+        total_capital=total_capital,
+        zscore_method=zscore_method,
+        sort_by_corr=sort_by_corr
+    )
+    return run_walk_forward_backtest(prices, pipeline=pipeline)
 
 def plot_equity_curves(equity_dict):
     plt.figure(figsize=(12, 8))
@@ -31,16 +61,16 @@ if __name__ == "__main__":
     
     print("Starting Walk-Forward Backtest...")
     print('Engle-Granger with Pearson filtering')
-    equity_eg_pearson, metrics_eg_pearson = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='simple')
-    equity_eg_pearson_sorted, metrics_eg_pearson_sorted = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='simple')
-    equity_eg_ou, metrics_eg_ou = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='ou')
-    equity_eg_ou_sorted, metrics_eg_ou_sorted = run_walk_forward_backtest(prices, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='ou')
+    equity_eg_pearson, metrics_eg_pearson = run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='simple')
+    equity_eg_pearson_sorted, metrics_eg_pearson_sorted = run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='simple')
+    equity_eg_ou, metrics_eg_ou = run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='ou')
+    equity_eg_ou_sorted, metrics_eg_ou_sorted = run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='ou')
 
     print('Johansen with Pearson filtering')
-    equity_johansen_pearson, metrics_johansen_pearson = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='simple')
-    equity_johansen_pearson_sorted, metrics_johansen_pearson_sorted = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='simple')
-    equity_johansen_ou, metrics_johansen_ou = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='ou')
-    equity_johansen_ou_sorted, metrics_johansen_ou_sorted = run_walk_forward_backtest(prices, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='ou')
+    equity_johansen_pearson, metrics_johansen_pearson = run_backtests_coint(prices, total_capital=100.0, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='simple')
+    equity_johansen_pearson_sorted, metrics_johansen_pearson_sorted = run_backtests_coint(prices, total_capital=100.0, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='simple')
+    equity_johansen_ou, metrics_johansen_ou = run_backtests_coint(prices, total_capital=100.0, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=False, zscore_method='ou')
+    equity_johansen_ou_sorted, metrics_johansen_ou_sorted = run_backtests_coint(prices, total_capital=100.0, method='johansen', corr_method='pearson', n=n, k=k, sort_by_corr=True, zscore_method='ou')
 
 
     equity_dict = {
@@ -48,10 +78,10 @@ if __name__ == "__main__":
         'EG-Pearson-Sorted': equity_eg_pearson_sorted,
         'Johansen-Pearson': equity_johansen_pearson,
         'Johansen-Pearson-Sorted': equity_johansen_pearson_sorted,
-        'EG-Pearson-Ou': equity_eg_ou,
-        'EG-Pearson-Ou-Sorted': equity_eg_ou_sorted,
-        'Johansen-Pearson-Ou': equity_johansen_ou,
-        'Johansen-Pearson-Ou-Sorted': equity_johansen_ou_sorted
+        'EG-Pearson-staticOU': equity_eg_ou,
+        'EG-Pearson-staticOU-Sorted': equity_eg_ou_sorted,
+        'Johansen-Pearson-staticOU': equity_johansen_ou,
+        'Johansen-Pearson-staticOU-Sorted': equity_johansen_ou_sorted
     }
     
     # Print metrics in a table
@@ -63,10 +93,10 @@ if __name__ == "__main__":
         'EG-Pearson-Sorted': metrics_eg_pearson_sorted,
         'Johansen-Pearson': metrics_johansen_pearson,
         'Johansen-Pearson-Sorted': metrics_johansen_pearson_sorted,
-        'EG-Pearson-Ou': metrics_eg_ou,
-        'EG-Pearson-Ou-Sorted': metrics_eg_ou_sorted,
-        'Johansen-Pearson-Ou': metrics_johansen_ou,
-        'Johansen-Pearson-Ou-Sorted': metrics_johansen_ou_sorted
+        'EG-Pearson-staticOU': metrics_eg_ou,
+        'EG-Pearson-staticOU-Sorted': metrics_eg_ou_sorted,
+        'Johansen-Pearson-staticOU': metrics_johansen_ou,
+        'Johansen-Pearson-staticOU-Sorted': metrics_johansen_ou_sorted
     }
     
     for label, equity in equity_dict.items():
