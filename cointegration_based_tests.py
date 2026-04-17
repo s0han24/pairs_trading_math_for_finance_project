@@ -1,6 +1,6 @@
 from cointegration_based.config.universe import NIFTY100
 import matplotlib.pyplot as plt
-from cointegration_based.backtest.walk_forward_pipeline import run_walk_forward_backtest
+from backtests.walk_forward_pipeline import run_walk_forward_backtest
 from cointegration_based.data.downloader import download_price_data
 from prettytable import PrettyTable
 

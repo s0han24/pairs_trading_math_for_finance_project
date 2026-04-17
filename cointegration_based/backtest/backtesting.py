@@ -1,28 +1,10 @@
-from .metrics import sharpe_ratio, max_drawdown, compute_returns
+from backtests.metrics import sharpe_ratio, max_drawdown, compute_returns, compute_alpha_beta, compute_annual_volatility
 from cointegration_based.spread_models.spread import compute_spread
 from cointegration_based.spread_models.zscore import zscore
 from cointegration_based.strategy.signals import generate_positions
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-def compute_alpha_beta(strategy_returns, benchmark_returns, risk_free_rate=0.0, frequency=252):
-    excess_strategy = strategy_returns - risk_free_rate / frequency
-    excess_benchmark = benchmark_returns - risk_free_rate / frequency
-    
-    # Calculate beta
-    cov = np.cov(excess_strategy, excess_benchmark)[0, 1]
-    var_bench = np.var(excess_benchmark)
-    beta = cov / var_bench if var_bench != 0 else 0.0
-    
-    # Calculate annualized alpha
-    alpha_daily = np.mean(excess_strategy) - beta * np.mean(excess_benchmark)
-    alpha = alpha_daily * frequency
-    
-    return alpha, beta
-
-def compute_annual_volatility(returns, frequency=252):
-    return returns.std() * np.sqrt(frequency)
 
 def backtest_pairs(pairs, prices_ood, zscore_method='simple', total_capital=100.0, plot=False):
     k = len(pairs)

@@ -1,6 +1,6 @@
 # Pairs Trading Strategies
 
-This repository currently implements a cointegration-based pairs trading pipeline on the NIFTY100 universe.
+This repository currently implements a cointegration-based pairs trading pipeline on the NIFTY100 universe, with shared backtesting utilities reused across strategy variants.
 
 ## Current Scope
 
@@ -8,7 +8,7 @@ Implemented:
 1. Cointegration-based pair selection (Engle-Granger and Johansen)
 2. Correlation pre-filtering (Pearson)
 3. Spread modeling and z-score-based signal generation
-4. Walk-forward backtesting with portfolio metrics
+4. Shared walk-forward backtesting with portfolio metrics
 
 Planned in the project outline but not implemented in this codebase yet:
 1. Negative-correlation-based strategy variants
@@ -26,10 +26,12 @@ pairs_trading_math_for_finance_project/
 ├── ind_nifty100list.csv
 ├── correlation_statistics/
 │   └── statistics.py
+├── backtests/
+│   ├── metrics.py
+│   └── walk_forward_pipeline.py
 └── cointegration_based/
     ├── backtest/
     │   ├── backtesting.py
-    │   └── metrics.py
     ├── config/
     │   └── universe.py
     ├── data/
@@ -54,7 +56,7 @@ pairs_trading_math_for_finance_project/
 4. Cointegration testing to keep tradable pairs
 5. Spread and z-score computation (`simple` or `ou`)
 6. Signal generation (long/short spread with mean-reversion exits)
-7. Walk-forward backtest and metrics calculation
+7. Shared walk-forward backtest and metrics calculation
 
 ## How to Run
 
@@ -64,7 +66,7 @@ Run the main experiment script:
 python cointegration_based_tests.py
 ```
 
-The script performs a walk-forward backtest across rolling train/test windows and compares multiple strategy variants, including:
+The script builds a `CointegrationPipeline`, passes it into the shared walk-forward backtester, and compares multiple strategy variants, including:
 1. Engle-Granger vs Johansen
 2. Sorted-by-correlation vs p-value-first selection
 3. `simple` vs `ou` z-score method

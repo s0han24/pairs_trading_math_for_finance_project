@@ -1,9 +1,7 @@
-from cointegration_based.strategy.pipeline import CointegrationPipeline
-from .backtesting import compute_alpha_beta, compute_annual_volatility
-from .metrics import sharpe_ratio, max_drawdown
+from .metrics import sharpe_ratio, max_drawdown, compute_alpha_beta, compute_annual_volatility
 import pandas as pd
 
-def run_walk_forward_backtest(prices, pipeline=None):
+def run_walk_forward_backtest(prices, pipeline):
     
     # 2 years (approx 504 trading days) in sample, 2 years out sample
     # Walk forward windows:
@@ -24,19 +22,6 @@ def run_walk_forward_backtest(prices, pipeline=None):
     all_equity = []
     
     benchmark_returns_list = []
-    
-    if pipeline is None:
-        pipeline = CointegrationPipeline(
-            coint_test_method='engle-granger', 
-            corr_method='pearson',
-            total_capital=100.0,
-            pvalue_threshold=0.05,
-            corr_threshold=0.8,
-            n=20,
-            k=5,            
-            zscore_method='simple',
-            sort_by_corr=False
-        )
 
     initial_capital = pipeline.total_capital
     current_capital = initial_capital
