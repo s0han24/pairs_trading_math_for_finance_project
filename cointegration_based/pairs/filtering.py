@@ -1,6 +1,5 @@
 # This module contains functions for filtering pairs before expensive cointegration tests. This is useful when the universe of stocks is large and we want to reduce the number of pairs to test for cointegration.
 from itertools import combinations
-import numpy as np
 from correlation_statistics.statistics import pearson_correlation
 
 corr_functions = {

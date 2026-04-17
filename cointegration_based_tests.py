@@ -7,7 +7,14 @@ from prettytable import PrettyTable
 
 from cointegration_based.strategy.pipeline import CointegrationPipeline
 
-def run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=20, k=5, sort_by='pval', zscore_method='simple', pvalue_threshold=0.05, corr_threshold=0.8, entry_threshold=2.0, exit_threshold=0.5, stop_loss_threshold=5.0):
+import numpy as np
+import random
+
+# Set seeds for reproducibility
+np.random.seed(0)
+random.seed(0)
+
+def run_backtests_coint(prices, total_capital=100.0, method='engle-granger', corr_method='pearson', n=20, k=5, sort_by='pval', zscore_method='simple', pvalue_threshold=0.05, corr_threshold=0.0, entry_threshold=2.0, exit_threshold=0.5, stop_loss_threshold=5.0):
     """
     Run a walk-forward cointegration backtest with configurable pair-selection settings.
 
@@ -119,18 +126,6 @@ if __name__ == "__main__":
     table = PrettyTable()
     table.field_names = ["Strategy", "Final Capital", "Max Drawdown", "Sharpe Ratio", "Alpha", "Beta", "Annual Volatility"]
     
-    for label, equity in equity_dict.items():
-        metrics = metrics_mapping.get(label)
-        
-        table.add_row([
-            label, 
-            f"{metrics['final_capital']:.2f}", 
-            f"{metrics['max_drawdown']:.2%}", 
-            f"{metrics['sharpe_ratio']:.2f}", 
-            f"{metrics['alpha']:.4f}", 
-            f"{metrics['beta']:.4f}", 
-            f"{metrics['annual_volatility']:.2%}"
-        ])
     # Sort by final capital descending before building table
     sorted_labels = sorted(
         equity_dict.keys(),
