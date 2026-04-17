@@ -88,11 +88,36 @@ Performance is collated across out-of-sample stretches evaluating:
 The primary driver scripts are:
 - `cointegration_based_tests.py`: Loops across different methods ('engle-granger', 'johansen'), z-score strategies ('simple', 'ou'), and boolean sorting to evaluate strategy outputs.
 
+---
+
+## 6. Baselines (`baselines.py`)
+
+Five simple baseline strategies are implemented to benchmark the cointegration pairs-trading approach. All baselines share the same walk-forward windows (2-year train → 2-year test) and the same metrics interface.
+
+### Strategy Summary
+
+| Strategy | Description |
+|---|---|
+| **40-60** | Hold 40% in cash (earning 6.5% risk-free) and 60% tracking the ^NSEI index. |
+| **EqualWeight** | Split capital equally across all stocks and rebalance back to equal weights every day. |
+| **EW_BuyHold** | Split capital equally across all stocks on day 1, then do nothing and let winners drift. |
+| **Greedy** | Each training window, find the stock with the highest 2-year cumulative gain; bet 100% on it for the next 2 years. |
+| **Market** | Put 100% in the ^NSEI index — the plain "just buy the index" benchmark. |
+
+### Assumptions 
+
+| Assumption | Value | Notes |
+|---|---|---|
+| Starting capital | **$100** | Initial portfolio value at the start of the first window |
+| Risk-free rate | **6.5% p.a.** | Indian T-bill proxy; used only by the 40-60 baseline; converted to daily as $(1.065)^{1/252} - 1$ |
+| Benchmark | **^NSEI (NIFTY 50)** | All alpha/beta computed against the NIFTY 50 index daily returns |
+
+
+
 ## Future Work
 - Implement more correlation statistics
 - Add additional risk measure calculations
 - ML or DL based approaches
-- Baselines
 - Extend the cointegration approach to include stochastic modeling based approaches such as:
     1. Time-varying OU
     2. Kalman Filter
