@@ -2,9 +2,7 @@
 
 This repository implements a systematic statistical arbitrage (pairs trading) pipeline deployed on the **NIFTY100 universe**. It focuses heavily on statistical cointegration, rolling window backtests, and alternative z-score construction paradigms (simple moving average vs. Ornstein-Uhlenbeck processes).
 
-**Goal of this README**: Provide absolute clarity regarding the architecture, math, data structures, and assumptions embedded into the python files so that an LLM or developer can infer the system's exact state without opening the source code. Note: There is an `ml_based` folder not explicitly detailed in this document as it pertains to an isolated random-forest/deep-learning experiment.
-
-For now, ignore the `ml_based/` folder and `ml_based_tests.py` which are still being worked on.
+**Goal of this README**: Provide absolute clarity regarding the architecture, math, data structures, and assumptions embedded into the python files so that an LLM or developer can infer the system's exact state without opening the source code. In case of additions, please update them here.
 
 ---
 
@@ -35,7 +33,7 @@ We test the top $n$ correlated pairs using either:
 - **Engle-Granger**: Two-step OLS with Dickey-Fuller on residuals (using `statsmodels.tsa.stattools.coint`).
 - **Johansen**: Vector Error Correction Model (using `statsmodels.tsa.vector_ar.vecm.coint_johansen` with `det_order=0, k_ar_diff=1`).
 - **P-Value assignment**: Pairs scoring a generalized p-value $< P_{threshold}$ (default `0.05`) are retained.
-- **Selection**: We take the top $k$ pairs (default `5` or `10`), either sorted by the lowest p-value (`sort_by_corr=False`) OR sorted by the highest correlation (`sort_by_corr=True`).
+- **Selection**: We take the top $k$ pairs (default `5` or `10`), sorted by **In-Sample Sharpe Ratio** to prioritize historically profitable cointegrated pairs (alternatively, pairs can be sorted by the lowest p-value or highest correlation).
 
 ---
 
@@ -64,6 +62,7 @@ To isolate mean-reverting deviations, we compute $Z_t$. Two methods are supporte
 For a given Z-score timeseries:
 - **Entry**: When $Z_t > 2.0$, Position = $-1$ (Short spread: Short $y$, Long $x$). When $Z_t < -2.0$, Position = $+1$ (Long spread: Long $y$, Short $x$).
 - **Exit**: When $|Z_t| \le 0.5$, Position = $0$ (Flatten).
+- **Stop Loss**: Liquidate position (return to neutral) if the spread diverges beyond an unacceptable threshold.
 - **Hold**: Otherwise, previous position is maintained.
 
 ### Portfolio Aggregation
@@ -88,14 +87,13 @@ Performance is collated across out-of-sample stretches evaluating:
 ## 5. Main Entry points
 The primary driver scripts are:
 - `cointegration_based_tests.py`: Loops across different methods ('engle-granger', 'johansen'), z-score strategies ('simple', 'ou'), and boolean sorting to evaluate strategy outputs.
-- `ml_based_tests.py`: Similar execution but testing the alternate Machine Learning paradigm (`ml_based/strategy/pipeline.py`).
 
 ## Future Work
 - Implement more correlation statistics
-- Sort by in-sample Sharpe Ratio instead of p-values and corr values.
-- Add stop-loss and risk measure calculation
+- Add additional risk measure calculations
 - ML or DL based approaches
 - Baselines
 - Extend the cointegration approach to include stochastic modeling based approaches such as:
     1. Time-varying OU
     2. Kalman Filter
+- Try DRL for position generation
