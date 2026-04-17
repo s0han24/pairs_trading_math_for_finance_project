@@ -6,7 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-def backtest_pairs(pairs, prices_ood, zscore_method='simple', total_capital=100.0, plot=False):
+def backtest_pairs(pairs, prices_ood, zscore_method='simple', total_capital=100.0, plot=False, entry_threshold=2.0, exit_threshold=0.5, stop_loss_threshold=5.0):
+    if not exit_threshold < entry_threshold < stop_loss_threshold:
+        raise ValueError("Thresholds must satisfy: exit_threshold < entry_threshold < stop_loss_threshold")
+    
     k = len(pairs)
     capital_per_pair = total_capital / k
     
@@ -29,7 +32,7 @@ def backtest_pairs(pairs, prices_ood, zscore_method='simple', total_capital=100.
 
         z = zscore(spread, method=zscore_method)
 
-        position = generate_positions(z)
+        position = generate_positions(z, entry=entry_threshold, exit=exit_threshold, stop_loss=stop_loss_threshold)
 
         # compute_returns provides base 1-unit equity and returns
         _, strategy_returns = compute_returns(y, x, beta_hr, position)

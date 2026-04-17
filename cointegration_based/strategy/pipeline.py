@@ -12,7 +12,14 @@ class CointegrationPipeline:
                  n=20, 
                  k=5, 
                  total_capital=100.0,
-                 sort_by_corr=False):
+                 sort_by='corr',
+                 entry_threshold=2.0,
+                 exit_threshold=0.5,
+                 stop_loss_threshold=5.0):
+        
+        if not exit_threshold < entry_threshold < stop_loss_threshold:
+            raise ValueError("Thresholds must satisfy: exit_threshold < entry_threshold < stop_loss_threshold")
+        
         self.coint_test_method = coint_test_method
         self.corr_method = corr_method
         self.pvalue_threshold = pvalue_threshold
@@ -21,9 +28,12 @@ class CointegrationPipeline:
         self.k = k
         self.total_capital = total_capital
         self.zscore_method = zscore_method
-        self.sort_by_corr = sort_by_corr
+        self.sort_by = sort_by
 
         self.selected_pairs = []
+        self.entry_threshold = entry_threshold
+        self.exit_threshold = exit_threshold
+        self.stop_loss_threshold = stop_loss_threshold
 
     def fit(self, train_prices):
         self.selected_pairs = find_top_k_cointegrated_pairs_with_filtering(
@@ -32,7 +42,7 @@ class CointegrationPipeline:
             corr_threshold=self.corr_threshold, 
             n=self.n, 
             k=self.k, 
-            sort_by_corr=self.sort_by_corr,
+            sort_by=self.sort_by,
             coint_test_method=self.coint_test_method,
             corr_method=self.corr_method
         )
@@ -43,5 +53,14 @@ class CointegrationPipeline:
             print("No pairs selected. Please run fit() first, or try adjusting thresholds.")
             return None, None
             
-        return backtest_pairs(self.selected_pairs, test_prices, total_capital=self.total_capital, plot=plot, zscore_method=self.zscore_method)
+        return backtest_pairs(
+            self.selected_pairs, 
+            test_prices, 
+            total_capital=self.total_capital, 
+            plot=plot, 
+            zscore_method=self.zscore_method, 
+            entry_threshold=self.entry_threshold, 
+            exit_threshold=self.exit_threshold, 
+            stop_loss_threshold=self.stop_loss_threshold
+        )
 

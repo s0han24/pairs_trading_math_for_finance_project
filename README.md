@@ -93,6 +93,7 @@ The primary driver scripts are:
 ## Future Work
 - Implement more correlation statistics
 - Sort by in-sample Sharpe Ratio instead of p-values and corr values.
+- Add stop-loss and risk measure calculation
 - ML or DL based approaches
 - Baselines
 - Extend the cointegration approach to include stochastic modeling based approaches such as:
