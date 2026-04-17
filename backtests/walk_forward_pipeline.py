@@ -33,26 +33,33 @@ def run_walk_forward_backtest(prices, pipeline):
         test_prices = prices.loc[end_in_start_ood:end_ood]
         
         # Fit on training data
-        selected_pairs = pipeline.fit(train_prices)
-        print(f"Selected {len(selected_pairs)} pairs.")
-        for s1, s2, corr, pvalue in selected_pairs:
-            print(f"  {s1}-{s2} (P-value: {pvalue:.4f}, Corr: {corr:.2f})")
+        fit_result = pipeline.fit(train_prices)
+        
+        # Check if pipeline is pairs-based
+        if hasattr(pipeline, 'selected_pairs'):
+            selected_pairs = pipeline.selected_pairs
+            print(f"Selected {len(selected_pairs)} pairs.")
+            for s1, s2, corr, pvalue in selected_pairs:
+                print(f"  {s1}-{s2} (P-value: {pvalue:.4f}, Corr: {corr:.2f})")
+            
+            if not selected_pairs:
+                print("No pairs found. Holding cash.")
+                # Equity remains flat
+                cash_eq = pd.Series(current_capital, index=test_prices.index)
+                all_equity.append(cash_eq)
+                continue
+        else:
+            print("Model fitted.")
             
         # Benchmark
         bench_ret = test_prices.pct_change().mean(axis=1).fillna(0)
         benchmark_returns_list.append(bench_ret)
         
         # Backtest on test data
-        if not selected_pairs:
-            print("No pairs found. Holding cash.")
-            # Equity remains flat
-            cash_eq = pd.Series(current_capital, index=test_prices.index)
-            all_equity.append(cash_eq)
-        else:
-            pipeline.total_capital = current_capital
-            equity_series, _ = pipeline.backtest(test_prices, plot=False)
-            all_equity.append(equity_series)
-            current_capital = equity_series.iloc[-1]
+        pipeline.total_capital = current_capital
+        equity_series, _ = pipeline.backtest(test_prices, plot=False)
+        all_equity.append(equity_series)
+        current_capital = equity_series.iloc[-1]
             
     # Combine walk-forward pieces 
     # Drop duplicates at boundaries

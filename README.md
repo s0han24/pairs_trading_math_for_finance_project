@@ -1,6 +1,6 @@
 # Pairs Trading Strategies
 
-This repository currently implements a cointegration-based pairs trading pipeline on the NIFTY100 universe, with shared backtesting utilities reused across strategy variants.
+This repository currently implements a cointegration-based pairs trading pipeline on the NIFTY100 universe, with shared backtesting utilities which can be reused across strategy variants.
 
 ## Current Scope
 
@@ -29,13 +29,13 @@ pairs_trading_math_for_finance_project/
 ├── backtests/
 │   ├── metrics.py
 │   └── walk_forward_pipeline.py
+├── config/
+│   └── universe.py
+├── data/
+│   └── downloader.py
 └── cointegration_based/
     ├── backtest/
     │   ├── backtesting.py
-    ├── config/
-    │   └── universe.py
-    ├── data/
-    │   └── downloader.py
     ├── pairs/
     │   ├── cointegration.py
     │   └── filtering.py
@@ -83,6 +83,7 @@ pip install yfinance pandas numpy statsmodels matplotlib scikit-learn prettytabl
 
 ## Future Work
 - Implement more correlation statistics
+- Sort by in-sample Sharpe Ratio instead of p-values and corr values.
 - ML or DL based approaches
 - Baselines
 - Extend the cointegration approach to include stochastic modeling based approaches such as:

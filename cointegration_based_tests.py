@@ -1,7 +1,7 @@
-from cointegration_based.config.universe import NIFTY100
+from config.universe import NIFTY100
 import matplotlib.pyplot as plt
 from backtests.walk_forward_pipeline import run_walk_forward_backtest
-from cointegration_based.data.downloader import download_price_data
+from data.downloader import download_price_data
 from prettytable import PrettyTable
 
 from cointegration_based.strategy.pipeline import CointegrationPipeline
@@ -49,7 +49,7 @@ def plot_equity_curves(equity_dict):
 
 if __name__ == "__main__":
     tickers = NIFTY100
-    n = 50  # Number of pairs to keep after correlation filtering
+    n = 100  # Number of pairs to keep after correlation filtering
     k = 5   # Number of pairs to trade after cointegration testing
     ''' 
     The following are to be compared(with both sort_by_corr=False and sort_by_corr=True and zscore_method='simple' and zscore_method='ou'):
