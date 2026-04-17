@@ -1,85 +1,94 @@
-# Pairs Trading Strategies
+# Pairs Trading Framework: Math for Finance
 
-This repository currently implements a cointegration-based pairs trading pipeline on the NIFTY100 universe, with shared backtesting utilities which can be reused across strategy variants.
+This repository implements a systematic statistical arbitrage (pairs trading) pipeline deployed on the **NIFTY100 universe**. It focuses heavily on statistical cointegration, rolling window backtests, and alternative z-score construction paradigms (simple moving average vs. Ornstein-Uhlenbeck processes).
 
-## Current Scope
+**Goal of this README**: Provide absolute clarity regarding the architecture, math, data structures, and assumptions embedded into the python files so that an LLM or developer can infer the system's exact state without opening the source code. Note: There is an `ml_based` folder not explicitly detailed in this document as it pertains to an isolated random-forest/deep-learning experiment.
 
-Implemented:
-1. Cointegration-based pair selection (Engle-Granger and Johansen)
-2. Correlation pre-filtering (Pearson)
-3. Spread modeling and z-score-based signal generation
-4. Shared walk-forward backtesting with portfolio metrics
+For now, ignore the `ml_based/` folder and `ml_based_tests.py` which are still being worked on.
 
-Planned in the project outline but not implemented in this codebase yet:
-1. Negative-correlation-based strategy variants
-2. Baseline portfolios (40-60, equal-weight, greedy, market-only)
+---
 
-## Universe
+## 1. Project Overview & Architecture
 
-The stock universe is NIFTY100. Tickers are read from `ind_nifty100list.csv` in `cointegration_based/config/universe.py`, and `.NS` suffixes are added where needed.
+The framework is structured into shared modules and strategy-specific modules:
+1. **Universe Setup**: (`config/universe.py`) Contains the NIFTY100 tickers loaded from a CSV.
+2. **Data Download**: (`data/downloader.py`) Downloads adjusted close prices using `yfinance`.
+3. **Correlation Stats**: (`correlation_statistics/statistics.py`) Utilities for correlation computation across assets.
+4. **Strategy Pipeline**: (`cointegration_based/strategy/pipeline.py`) The main `CointegrationPipeline` class encapsulating the `fit()` and `backtest()` behavior.
+5. **Walk-Forward Evaluation**: (`backtests/walk_forward_pipeline.py` & `backtests/metrics.py`) Reusable 2-year train, 2-year test rolling boundaries and performance tracking.
 
-## Project Structure
+---
 
-```text
-pairs_trading_math_for_finance_project/
-├── cointegration_based_tests.py
-├── ind_nifty100list.csv
-├── correlation_statistics/
-│   └── statistics.py
-├── backtests/
-│   ├── metrics.py
-│   └── walk_forward_pipeline.py
-├── config/
-│   └── universe.py
-├── data/
-│   └── downloader.py
-└── cointegration_based/
-    ├── backtest/
-    │   ├── backtesting.py
-    ├── pairs/
-    │   ├── cointegration.py
-    │   └── filtering.py
-    ├── spread_models/
-    │   ├── hedge_ratio.py
-    │   ├── spread.py
-    │   └── zscore.py
-    └── strategy/
-        ├── pipeline.py
-        └── signals.py
-```
+## 2. In-Sample Training (The `fit` Phase)
 
-## Workflow
+The initial problem of pairs trading requires narrowing down $O(N^2)$ pairs into a tradable subset $k$. The framework uses a two-stage filter:
 
-1. Universe load from `ind_nifty100list.csv`
-2. Price download from Yahoo Finance
-3. Correlation filtering to keep top candidate pairs
-4. Cointegration testing to keep tradable pairs
-5. Spread and z-score computation (`simple` or `ou`)
-6. Signal generation (long/short spread with mean-reversion exits)
-7. Shared walk-forward backtest and metrics calculation
+### Stage 1: Correlation Filtering
+Located in `cointegration_based/pairs/filtering.py`.
+- **Input**: A price correlation matrix (Pearson by default).
+- **Action**: Sorts all pairs by correlation score and takes the top $n$ pairs (parameter `n` defaults to `20` or `50`).
+- **Threshold**: Requires correlations greater than `corr_threshold` (default `0.8`).
 
-## How to Run
+### Stage 2: Cointegration Testing
+Located in `cointegration_based/pairs/cointegration.py`.
+We test the top $n$ correlated pairs using either:
+- **Engle-Granger**: Two-step OLS with Dickey-Fuller on residuals (using `statsmodels.tsa.stattools.coint`).
+- **Johansen**: Vector Error Correction Model (using `statsmodels.tsa.vector_ar.vecm.coint_johansen` with `det_order=0, k_ar_diff=1`).
+- **P-Value assignment**: Pairs scoring a generalized p-value $< P_{threshold}$ (default `0.05`) are retained.
+- **Selection**: We take the top $k$ pairs (default `5` or `10`), either sorted by the lowest p-value (`sort_by_corr=False`) OR sorted by the highest correlation (`sort_by_corr=True`).
 
-Run the main experiment script:
+---
 
-```bash
-python cointegration_based_tests.py
-```
+## 3. Out-Of-Sample Trading (The `backtest` Phase)
 
-The script builds a `CointegrationPipeline`, passes it into the shared walk-forward backtester, and compares multiple strategy variants, including:
-1. Engle-Granger vs Johansen
-2. Sorted-by-correlation vs p-value-first selection
-3. `simple` vs `ou` z-score method
+Once $k$ pairs are locked in from the training window, we execute them out-of-sample over the subsequent 2 years through the `backtest_pairs` function (`cointegration_based/backtest/backtesting.py`).
 
-It prints a metrics table (final capital, max drawdown, Sharpe, alpha, beta, annual volatility) and plots equity curves.
+### Spread Construction
+For each chosen pair $(y, x)$, computed inside `cointegration_based/spread_models/spread.py`:
+1. Use `estimate_hedge_ratio` (`cointegration_based/spread_models/hedge_ratio.py`) to deduce dynamic or static $\beta$.
+2. The spread series is computed strictly as: $Spread_t = y_t - \beta x_t$.
 
-## Dependencies
+### Z-Score Parameterizations (`cointegration_based/spread_models/zscore.py`)
+To isolate mean-reverting deviations, we compute $Z_t$. Two methods are supported:
+1. **Simple (`method="simple"`)**:
+   Standard 60-day rolling window. 
+   $$Z_t = \frac{Spread_t - SMA_{60}(Spread)}{StdDev_{60}(Spread)}$$
+2. **Ornstein-Uhlenbeck (`method="ou"`)**:
+   Models the spread as $d S_t = \theta (\mu - S_t) dt + \sigma d W_t$.
+   - Using linear regression: $\Delta S_t = a + b S_{t-1}$ to estimate $\theta = -b$ and asymptotic mean $\mu = \frac{a}{1 - \theta}$.
+   - Expected mean: $E_{OU} = \mu + (S_t - \mu)e^{-\theta \times window}$.
+   - Expected standard deviation derived similarly. 
+   - $$Z_t = \frac{Spread_t - E_{OU}}{StdDev_{OU}}$$.
 
-Install required packages:
+### Signal Generation (`cointegration_based/strategy/signals.py`)
+For a given Z-score timeseries:
+- **Entry**: When $Z_t > 2.0$, Position = $-1$ (Short spread: Short $y$, Long $x$). When $Z_t < -2.0$, Position = $+1$ (Long spread: Long $y$, Short $x$).
+- **Exit**: When $|Z_t| \le 0.5$, Position = $0$ (Flatten).
+- **Hold**: Otherwise, previous position is maintained.
 
-```bash
-pip install yfinance pandas numpy statsmodels matplotlib scikit-learn prettytable
-```
+### Portfolio Aggregation
+Allocates capital equally among the $k$ pairs. Total portfolio wealth carries forward across windows.
+
+---
+
+## 4. Backtest Engine & Metrics
+
+The `run_walk_forward_backtest()` function (`backtests/walk_forward_pipeline.py`) steps through the following overlapping windows:
+- 2014-2016 Train $\rightarrow$ 2016-2018 Test
+- 2016-2018 Train $\rightarrow$ 2018-2020 Test
+... up to 2026.
+
+Performance is collated across out-of-sample stretches evaluating:
+- **Max Drawdown**: Highest peak to lowest trough drop (`backtests/metrics.py`).
+- **Sharpe Ratio**: Annualized excess returns / annualized volatility (assuming 252 freq, 0.0 risk-free rate).
+- **Alpha & Beta**: Computed via covariance against an equally weighted portfolio benchmark of the target universe.
+
+---
+
+## 5. Main Entry points
+The primary driver scripts are:
+- `cointegration_based_tests.py`: Loops across different methods ('engle-granger', 'johansen'), z-score strategies ('simple', 'ou'), and boolean sorting to evaluate strategy outputs.
+- `ml_based_tests.py`: Similar execution but testing the alternate Machine Learning paradigm (`ml_based/strategy/pipeline.py`).
 
 ## Future Work
 - Implement more correlation statistics
