@@ -11,6 +11,14 @@ For k=5
 | Johansen-Pearson-staticOU-SR-Sorted-StopLoss | 161.83 | -32.39% | 0.35 | 0.0767 | 0.0289 | 24.08% |
 | Johansen-Pearson-staticOU-SR-Sorted | 133.08 | -40.59% | 0.26 | 0.0776 | -0.0139 | 28.99% |
 
+probability cutoff = 0.0
+| Strategy | Final Capital | Max Drawdown | Sharpe Ratio | Alpha | Beta | Annual Volatility |
+| --- | --- | --- | --- | --- | --- | --- |
+| ML-XGB-k5 | 473.00 | -11.54% | 1.61 | 0.1735 | 0.0386 | 11.38% |
+| ML-RAF-k5 | 284.10 | -18.99% | 1.16 | 0.1197 | 0.0188 | 10.70% |
+| ML-Ensemble-k5 | 256.90 | -30.45% | 1.02 | 0.1067 | 0.0270 | 11.03% |
+| ML-DNN-k5 | 188.54 | -33.31% | 0.73 | 0.0796 | -0.0086 | 10.64% |
+
 probability cutoff = 0.5
 | Strategy | Final Capital | Max Drawdown | Sharpe Ratio | Alpha | Beta | Annual Volatility |
 | --- | --- | --- | --- | --- | --- | --- |

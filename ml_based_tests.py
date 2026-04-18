@@ -89,7 +89,7 @@ if __name__ == "__main__":
             total_capital=capital,
             k=k,
             models=models,
-            min_prob_threshold=0.55,
+            min_prob_threshold=0.0,
         )
         equity_dict[label]     = equity
         metrics_mapping[label] = metrics
