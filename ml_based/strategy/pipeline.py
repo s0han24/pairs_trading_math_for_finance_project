@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from xgboost import XGBClassifier
 from sklearn.preprocessing import StandardScaler
 import warnings
 
@@ -164,6 +165,18 @@ def _make_raf():
         random_state=1,
     )
 
+def _make_xgb():
+    """XGBoost with same hyperparameters as GBT."""
+    return XGBClassifier(
+        n_estimators=100,
+        max_depth=3,
+        learning_rate=0.1,
+        max_features=15,
+        use_label_encoder=False,
+        eval_metric="logloss",
+        random_state=1,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Main pipeline class
@@ -184,6 +197,8 @@ class MLPipeline:
                          Implements the paper's middle-censoring. 0.55 = soft threshold.
                          Set to 0.5 to disable.
     """
+    
+    _model_cache = {}
 
     def __init__(
         self,
@@ -200,6 +215,7 @@ class MLPipeline:
         self._dnn            = None
         self._gbt            = None
         self._raf            = None
+        self._xgb            = None
         self._scaler         = StandardScaler()
         self._fitted         = False
         self._warmup_prices  = None   # last _MAX_LAG rows of training data
@@ -214,34 +230,90 @@ class MLPipeline:
         # Always store warmup even if fit fails (guards against empty windows)
         self._warmup_prices = train_prices.iloc[-_MAX_LAG:].copy()
 
-        print("  Building feature matrix ...", end=" ", flush=True)
-        X, y = _compute_features(train_prices)
-        if X.empty:
-            print("no data -- skipping fit.")
-            self._fitted = False
-            return self
+        # Check for cached scaler and features
+        cache_key_prefix = f"{train_prices.index[0]}_{train_prices.index[-1]}"
+        scaler_key = f"{cache_key_prefix}_scaler"
+        X_key = f"{cache_key_prefix}_X"
+        y_key = f"{cache_key_prefix}_y"
+        
+        if scaler_key in MLPipeline._model_cache:
+            self._scaler = MLPipeline._model_cache[scaler_key]
+            X = MLPipeline._model_cache[X_key]
+            y = MLPipeline._model_cache[y_key]
+            print("  Using cached feature matrix ...", end=" ", flush=True)
+            if X.empty:
+                print("no data -- skipping fit.")
+                self._fitted = False
+                return self
+            print(f"{len(X):,} obs, class balance {y.mean():.2%}")
+            X_arr = self._scaler.transform(X.values)
+        else:
+            print("  Building feature matrix ...", end=" ", flush=True)
+            X, y = _compute_features(train_prices)
+            
+            MLPipeline._model_cache[X_key] = X
+            MLPipeline._model_cache[y_key] = y
+            
+            if X.empty:
+                print("no data -- skipping fit.")
+                self._fitted = False
+                return self
 
-        print(f"{len(X):,} obs, class balance {y.mean():.2%}")
-
-        X_arr = self._scaler.fit_transform(X.values)
+            print(f"{len(X):,} obs, class balance {y.mean():.2%}")
+            X_arr = self._scaler.fit_transform(X.values)
+            MLPipeline._model_cache[scaler_key] = self._scaler
 
         if "dnn" in self.model_names:
-            print("  Training DNN ...", end=" ", flush=True)
-            self._dnn = _make_dnn()
-            self._dnn.fit(X_arr, y.values)
-            print("done.")
+            dnn_key = f"{cache_key_prefix}_dnn"
+            if dnn_key in MLPipeline._model_cache:
+                print("  Using cached DNN ...", end=" ", flush=True)
+                self._dnn = MLPipeline._model_cache[dnn_key]
+                print("done.")
+            else:
+                print("  Training DNN ...", end=" ", flush=True)
+                self._dnn = _make_dnn()
+                self._dnn.fit(X_arr, y.values)
+                MLPipeline._model_cache[dnn_key] = self._dnn
+                print("done.")
 
         if "gbt" in self.model_names:
-            print("  Training GBT ...", end=" ", flush=True)
-            self._gbt = _make_gbt()
-            self._gbt.fit(X_arr, y.values)
-            print("done.")
+            gbt_key = f"{cache_key_prefix}_gbt"
+            if gbt_key in MLPipeline._model_cache:
+                print("  Using cached GBT ...", end=" ", flush=True)
+                self._gbt = MLPipeline._model_cache[gbt_key]
+                print("done.")
+            else:
+                print("  Training GBT ...", end=" ", flush=True)
+                self._gbt = _make_gbt()
+                self._gbt.fit(X_arr, y.values)
+                MLPipeline._model_cache[gbt_key] = self._gbt
+                print("done.")
 
         if "raf" in self.model_names:
-            print("  Training RAF ...", end=" ", flush=True)
-            self._raf = _make_raf()
-            self._raf.fit(X_arr, y.values)
-            print("done.")
+            raf_key = f"{cache_key_prefix}_raf"
+            if raf_key in MLPipeline._model_cache:
+                print("  Using cached RAF ...", end=" ", flush=True)
+                self._raf = MLPipeline._model_cache[raf_key]
+                print("done.")
+            else:
+                print("  Training RAF ...", end=" ", flush=True)
+                self._raf = _make_raf()
+                self._raf.fit(X_arr, y.values)
+                MLPipeline._model_cache[raf_key] = self._raf
+                print("done.")
+            
+        if "xgb" in self.model_names:
+            xgb_key = f"{cache_key_prefix}_xgb"
+            if xgb_key in MLPipeline._model_cache:
+                print("  Using cached XGB ...", end=" ", flush=True)
+                self._xgb = MLPipeline._model_cache[xgb_key]
+                print("done.")
+            else:
+                print("  Training XGB ...", end=" ", flush=True)
+                self._xgb = _make_xgb()
+                self._xgb.fit(X_arr, y.values)
+                MLPipeline._model_cache[xgb_key] = self._xgb
+                print("done.")
 
         self._fitted = True
         return self
@@ -250,7 +322,7 @@ class MLPipeline:
     def _ensemble_proba(self, X_raw):
         """
         Equal-weight ensemble of P(outperform) across all fitted models.
-        Paper eq. (5): P_ENS = (P_DNN + P_GBT + P_RAF) / 3.
+        Paper eq. (5): P_ENS = (P_DNN + P_GBT + P_RAF + P_XGB) / 4.
         """
         X_scaled = self._scaler.transform(X_raw)
         probs = []
@@ -261,6 +333,8 @@ class MLPipeline:
             probs.append(self._gbt.predict_proba(X_scaled)[:, 1])
         if "raf" in self.model_names and self._raf is not None:
             probs.append(self._raf.predict_proba(X_scaled)[:, 1])
+        if "xgb" in self.model_names and self._xgb is not None:
+            probs.append(self._xgb.predict_proba(X_scaled)[:, 1])
 
         if not probs:
             raise RuntimeError("No fitted models available for prediction.")
