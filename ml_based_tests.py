@@ -24,6 +24,12 @@ from prettytable import PrettyTable
 from prettytable import TableStyle
 import itertools
 
+import numpy as np
+import random
+
+# Set random seeds for reproducibility
+np.random.seed(42)
+random.seed(42)
 
 def run_backtest_ml(prices, total_capital=100.0, k=10, models=("dnn", "gbt", "raf"), min_prob_threshold=0.55):
     """
@@ -64,9 +70,9 @@ if __name__ == "__main__":
     model_configs = [
         ("XGB",      ("xgb",)),
         ("DNN",      ("dnn",)),
-        ("GBT",      ("gbt",)),
+        # ("GBT",      ("gbt",)),
         ("RAF",      ("raf",)),
-        ("Ensemble", ("dnn", "gbt", "raf", "xgb")),
+        ("Ensemble", ("dnn", "raf", "xgb")),
     ]
     # k_values = [5, 10]
     k_values = [5]  # For quicker testing; switch to [5, 10] for full grid
@@ -83,7 +89,7 @@ if __name__ == "__main__":
             total_capital=capital,
             k=k,
             models=models,
-            min_prob_threshold=0.0,
+            min_prob_threshold=0.55,
         )
         equity_dict[label]     = equity
         metrics_mapping[label] = metrics
