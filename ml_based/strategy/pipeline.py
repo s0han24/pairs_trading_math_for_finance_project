@@ -2,10 +2,18 @@
 ML-based statistical arbitrage pipeline for Nifty 100.
 
 Faithful implementation of Krauss, Do & Huck (2016):
-  - Features : R(m) for m in {1..20, 40, 60, ..., 240}  →  31 lagged-return features per stock
+  - Features : R(m) for m in {1..20, 40, 60, ..., 240}  -> 31 lagged-return features
   - Label    : 1 if stock beats cross-sectional median next-day return, else 0
-  - Models   : DNN (MLP), GBT, RAF, and equal-weight ensemble of predicted probabilities
-  - Trading  : rank all stocks by P(outperform), long top-k, short bottom-k (dollar-neutral)
+  - Models   : DNN (MLP), GBT, RAF, equal-weight ensemble of predicted probabilities
+  - Trading  : rank all stocks by P(outperform), long top-k, short bottom-k
+
+Key fixes vs. naive version:
+  1. Warmup prefix  -- last 240 days of train_prices stored during fit() and
+     prepended to test_prices in backtest(), so prediction works from day 1
+     of every test window (no dead cash-holding zone).
+  2. Confidence gate -- only trade on days where mean(top-k probs) >= min_prob_threshold.
+     Censors the uncertain middle of the ranking (paper intent).  Default 0.55.
+  3. Configurable k -- default 10 (paper); k=5 recommended for Nifty 100 universe.
 """
 
 import numpy as np
@@ -18,123 +26,110 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------------------------
-# Feature configuration (paper Section 4.2)
+# Feature configuration  (paper Section 4.2)
 # ---------------------------------------------------------------------------
-_LAGS = list(range(1, 21)) + list(range(40, 241, 20))   # 31 features
+_LAGS    = list(range(1, 21)) + list(range(40, 241, 20))   # 31 features
+_MAX_LAG = max(_LAGS)                                        # 240
 
 
-def _compute_features(prices: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+# ---------------------------------------------------------------------------
+# Training feature builder
+# ---------------------------------------------------------------------------
+
+def _compute_features(prices):
     """
-    Build (X, y) from a price DataFrame.
+    Build (X, y) from a price DataFrame for model training.
 
-    For every stock s and every date t (where all lags are available):
-        X[t, s] = [R(1), R(2), ..., R(20), R(40), ..., R(240)]  for stock s at time t
-        y[t, s] = 1 if R(1)_{t+1} for stock s > cross-sectional median R(1)_{t+1}
+    For every stock s and every date t where all 31 lags are available:
+        X[t, s] = [R(1), ..., R(20), R(40), ..., R(240)]
+        y[t, s] = 1 if R(1)_{t+1} > cross-sectional median R(1)_{t+1}, else 0
 
     Returns
     -------
-    X : pd.DataFrame  shape (n_obs, 31)  — each row is one (date, stock) observation
-    y : pd.Series     shape (n_obs,)     — binary label
-        Both share a MultiIndex (date, ticker).
+    X : pd.DataFrame  MultiIndex(date, ticker), 31 columns
+    y : pd.Series     same index, binary label
     """
-    max_lag = max(_LAGS)
+    ret_panel = {m: prices.pct_change(m) for m in _LAGS}
+    next_ret  = prices.pct_change(1).shift(-1)
 
-    # Simple returns R(m) = P_t / P_{t-m} - 1
-    feature_frames = {}
-    for m in _LAGS:
-        feature_frames[f"R{m}"] = prices.pct_change(m)
-
-    features = pd.concat(feature_frames, axis=1)   # MultiIndex columns: (Rm, ticker)
-    features.columns = ["_".join([str(c[0]), str(c[1])]) for c in features.columns]
-
-    # Next-day simple return for each stock
-    next_ret = prices.pct_change(1).shift(-1)
-
-    rows_X, rows_y = [], []
-
-    # Only iterate over dates where all features AND the label are available
-    valid_dates = features.index[max_lag:]          # need max_lag days of history
+    valid_dates = prices.index[_MAX_LAG:]
     valid_dates = valid_dates[valid_dates.isin(next_ret.dropna(how="all").index)]
 
+    all_X, all_y, all_idx = [], [], []
+
     for date in valid_dates:
-        feat_row = features.loc[date]               # Series indexed by "Rm_ticker"
-        ret_row = next_ret.loc[date].dropna()       # next-day returns, drop NaN stocks
-
-        if ret_row.empty:
+        nr = next_ret.loc[date].dropna()
+        if nr.empty:
             continue
+        median_ret = nr.median()
 
-        median_ret = ret_row.median()
-
-        for ticker in ret_row.index:
-            # Extract all 31 features for this (date, ticker)
-            cols = [f"R{m}_{ticker}" for m in _LAGS]
-            vals = feat_row.reindex(cols).values
-            if np.any(np.isnan(vals)):
+        for ticker in nr.index:
+            vals = np.array([ret_panel[m].loc[date, ticker] for m in _LAGS], dtype=float)
+            if np.any(np.isnan(vals)) or np.any(np.isinf(vals)):
                 continue
-            rows_X.append((date, ticker, vals))
-            rows_y.append(1 if ret_row[ticker] > median_ret else 0)
+            all_X.append(vals)
+            all_y.append(1 if nr[ticker] > median_ret else 0)
+            all_idx.append((date, ticker))
 
-    if not rows_X:
+    if not all_X:
         return pd.DataFrame(), pd.Series(dtype=int)
 
-    index = pd.MultiIndex.from_tuples([(r[0], r[1]) for r in rows_X],
-                                      names=["date", "ticker"])
-    X = pd.DataFrame([r[2] for r in rows_X],
-                     index=index,
-                     columns=[f"R{m}" for m in _LAGS])
-    y = pd.Series(rows_y, index=index, name="label")
+    idx = pd.MultiIndex.from_tuples(all_idx, names=["date", "ticker"])
+    X   = pd.DataFrame(all_X,  index=idx, columns=[f"R{m}" for m in _LAGS])
+    y   = pd.Series(all_y, index=idx, name="label")
     return X, y
 
 
-def _build_predict_matrix(prices: pd.DataFrame, date) -> tuple[pd.DataFrame, list]:
+# ---------------------------------------------------------------------------
+# Prediction feature builder  (single date, vectorised across stocks)
+# ---------------------------------------------------------------------------
+
+def _build_predict_matrix(prices, date):
     """
-    Build the feature matrix for ALL stocks at a single prediction date `date`.
-    Used during backtesting (one day at a time, no label needed).
+    Build the 31-feature row for every stock at `date`.
+
+    `prices` must include the warmup prefix so that the index position of
+    `date` is >= _MAX_LAG from the start of the DataFrame.
 
     Returns
     -------
-    X_pred : pd.DataFrame  shape (n_stocks, 31)
-    tickers : list of tickers (same order as rows)
+    X_pred  : pd.DataFrame  shape (n_valid_stocks, 31)
+    tickers : list[str]     same order as rows
     """
-    max_lag = max(_LAGS)
-    # Need prices up to `date` (inclusive) going back max_lag days
     loc = prices.index.get_loc(date)
-    if loc < max_lag:
+    if loc < _MAX_LAG:
         return pd.DataFrame(), []
 
-    window = prices.iloc[loc - max_lag: loc + 1]   # shape (max_lag+1, n_stocks)
+    window   = prices.iloc[loc - _MAX_LAG: loc + 1]   # shape (_MAX_LAG+1, n_stocks)
+    last_row = window.iloc[-1]
 
-    rows, tickers = [], []
-    for ticker in prices.columns:
-        s = window[ticker].dropna()
-        if len(s) < max_lag + 1:
-            continue
-        vals = np.array([s.iloc[-1] / s.iloc[-1 - m] - 1 for m in _LAGS])
-        if np.any(np.isnan(vals)) or np.any(np.isinf(vals)):
-            continue
-        rows.append(vals)
-        tickers.append(ticker)
+    feat_rows = {}
+    for m in _LAGS:
+        base_row = window.iloc[-1 - m]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            feat_rows[f"R{m}"] = last_row / base_row - 1.0
 
-    if not rows:
+    feat_df    = pd.DataFrame(feat_rows)
+    valid_mask = feat_df.replace([np.inf, -np.inf], np.nan).notna().all(axis=1)
+    feat_df    = feat_df[valid_mask]
+
+    if feat_df.empty:
         return pd.DataFrame(), []
 
-    X_pred = pd.DataFrame(rows, index=tickers, columns=[f"R{m}" for m in _LAGS])
-    return X_pred, tickers
+    return feat_df, feat_df.index.tolist()
 
 
 # ---------------------------------------------------------------------------
-# Model definitions (paper Section 4.3)
+# Model constructors  (paper Section 4.3)
 # ---------------------------------------------------------------------------
 
 def _make_dnn():
     """
-    31-31-10-5-2 architecture with dropout approximated via sklearn's alpha (L2) and
-    early_stopping.  sklearn MLP does not expose per-layer dropout, so we use:
-      - hidden_layer_sizes = (31, 10, 5)  — matches paper topology minus input/output
-      - activation = 'relu'  (closest practical equivalent to maxout in sklearn)
-      - alpha = 1e-5  (L1/L2 regularisation, paper uses lambda=0.00001)
-      - solver = 'adam'  (closest to ADADELTA adaptive learning)
-      - max_iter = 400 epochs  (paper trains 400 epochs)
+    Architecture 31-31-10-5-2 (paper topology).
+      relu   ~= maxout activation (maxout unavailable in sklearn)
+      adam   ~= ADADELTA (both adaptive momentum-based)
+      alpha    = 1e-5 matches paper lambda_DNN = 0.00001
+      400 epochs as per paper
     """
     return MLPClassifier(
         hidden_layer_sizes=(31, 10, 5),
@@ -149,9 +144,7 @@ def _make_dnn():
 
 
 def _make_gbt():
-    """
-    Paper: MGBT=100 trees, JGBT=3 depth, lambda=0.1 learning rate, mGBT=15 features.
-    """
+    """Paper: 100 trees, depth=3, lr=0.1, 15 random features per split."""
     return GradientBoostingClassifier(
         n_estimators=100,
         max_depth=3,
@@ -162,15 +155,13 @@ def _make_gbt():
 
 
 def _make_raf():
-    """
-    Paper: BRAF=1000 trees, JRAF=20 depth, mRAF=sqrt(p)=sqrt(31)~6 features.
-    """
+    """Paper: 1000 trees, depth=20, mRAF=sqrt(31)~6 features per split."""
     return RandomForestClassifier(
         n_estimators=1000,
         max_depth=20,
         max_features="sqrt",
-        random_state=1,
         n_jobs=-1,
+        random_state=1,
     )
 
 
@@ -180,68 +171,86 @@ def _make_raf():
 
 class MLPipeline:
     """
-    Stateful pipeline that mirrors the interface of CointegrationPipeline:
-        .fit(train_prices)   →  trains DNN, GBT, RAF on the training window
-        .predict_proba(X)    →  returns ensemble probability for each stock
-        .backtest(test_prices, k, total_capital)  →  equity_series
+    Mirrors CointegrationPipeline's external interface:
+        fit(train_prices)            -> trains models, stores warmup prefix
+        backtest(test_prices, plot)  -> returns (equity_series, None)
+
+    Parameters
+    ----------
+    k                  : long + short leg size (default 10; use 5 for Nifty 100)
+    total_capital      : starting / carried-forward capital (set by runner each window)
+    models             : which base learners to ensemble ("dnn", "gbt", "raf")
+    min_prob_threshold : minimum mean P(outperform) of top-k required to trade on a day.
+                         Implements the paper's middle-censoring. 0.55 = soft threshold.
+                         Set to 0.5 to disable.
     """
 
-    def __init__(self,
-                 k: int = 10,
-                 total_capital: float = 100.0,
-                 models: tuple = ("dnn", "gbt", "raf")):
-        self.k = k
-        self.total_capital = total_capital
-        self.model_names = models
+    def __init__(
+        self,
+        k=10,
+        total_capital=100.0,
+        models=("dnn", "gbt", "raf"),
+        min_prob_threshold=0.55,
+    ):
+        self.k                  = k
+        self.total_capital      = total_capital
+        self.model_names        = models
+        self.min_prob_threshold = min_prob_threshold
 
-        self._dnn = None
-        self._gbt = None
-        self._raf = None
-        self._scaler = StandardScaler()
-        self._fitted = False
+        self._dnn            = None
+        self._gbt            = None
+        self._raf            = None
+        self._scaler         = StandardScaler()
+        self._fitted         = False
+        self._warmup_prices  = None   # last _MAX_LAG rows of training data
 
     # ------------------------------------------------------------------
-    def fit(self, train_prices: pd.DataFrame):
+    def fit(self, train_prices):
         """
-        Build features from train_prices, fit all enabled models.
+        1. Store last _MAX_LAG days of train_prices as warmup prefix.
+        2. Build (X, y) from the full training window.
+        3. Fit all enabled models on the scaled feature matrix.
         """
-        print("  Building feature matrix …", end=" ", flush=True)
+        # Always store warmup even if fit fails (guards against empty windows)
+        self._warmup_prices = train_prices.iloc[-_MAX_LAG:].copy()
+
+        print("  Building feature matrix ...", end=" ", flush=True)
         X, y = _compute_features(train_prices)
         if X.empty:
-            print("no data — skipping fit.")
+            print("no data -- skipping fit.")
             self._fitted = False
             return self
 
-        print(f"{len(X):,} observations, class balance {y.mean():.2%}")
+        print(f"{len(X):,} obs, class balance {y.mean():.2%}")
 
-        X_scaled = self._scaler.fit_transform(X.values)
+        X_arr = self._scaler.fit_transform(X.values)
 
         if "dnn" in self.model_names:
-            print("  Training DNN …", end=" ", flush=True)
+            print("  Training DNN ...", end=" ", flush=True)
             self._dnn = _make_dnn()
-            self._dnn.fit(X_scaled, y.values)
+            self._dnn.fit(X_arr, y.values)
             print("done.")
 
         if "gbt" in self.model_names:
-            print("  Training GBT …", end=" ", flush=True)
+            print("  Training GBT ...", end=" ", flush=True)
             self._gbt = _make_gbt()
-            self._gbt.fit(X_scaled, y.values)
+            self._gbt.fit(X_arr, y.values)
             print("done.")
 
         if "raf" in self.model_names:
-            print("  Training RAF …", end=" ", flush=True)
+            print("  Training RAF ...", end=" ", flush=True)
             self._raf = _make_raf()
-            self._raf.fit(X_scaled, y.values)
+            self._raf.fit(X_arr, y.values)
             print("done.")
 
         self._fitted = True
         return self
 
     # ------------------------------------------------------------------
-    def _predict_proba_from_matrix(self, X_raw: np.ndarray) -> np.ndarray:
+    def _ensemble_proba(self, X_raw):
         """
-        Returns ensemble probability P(outperform) for each row in X_raw.
-        Ensemble = equal-weight average of all enabled models (paper eq. 5).
+        Equal-weight ensemble of P(outperform) across all fitted models.
+        Paper eq. (5): P_ENS = (P_DNN + P_GBT + P_RAF) / 3.
         """
         X_scaled = self._scaler.transform(X_raw)
         probs = []
@@ -254,68 +263,101 @@ class MLPipeline:
             probs.append(self._raf.predict_proba(X_scaled)[:, 1])
 
         if not probs:
-            raise RuntimeError("No models have been trained.")
+            raise RuntimeError("No fitted models available for prediction.")
 
         return np.mean(probs, axis=0)
 
     # ------------------------------------------------------------------
-    def backtest(self,
-                 test_prices: pd.DataFrame,
-                 plot: bool = False) -> tuple:
+    def backtest(self, test_prices, plot=False):
         """
         Walk day-by-day through test_prices:
-          1. Build feature matrix for all stocks at date t
-          2. Predict P(outperform) with the ensemble
-          3. Long top-k, short bottom-k  (dollar-neutral)
-          4. Realise P&L from t→t+1 actual returns
+          1. Prepend warmup prefix so feature lookback is satisfied from day 1.
+          2. For each date, build prediction matrix, rank stocks by P(outperform).
+          3. Confidence gate: hold cash if mean(top-k probs) < min_prob_threshold.
+          4. Otherwise: long top-k, short bottom-k, dollar-neutral equal weight.
+          5. Realise P&L from next-day returns; compound capital.
 
         Signature matches CointegrationPipeline.backtest(test_prices, plot=False)
-        so the shared backtests.walk_forward_pipeline runner works unchanged.
+        so the shared backtests.walk_forward_pipeline runner needs no changes.
 
         Returns
         -------
-        (equity_series, None) — second element is None (no pair-level detail for ML)
+        (equity_series, None)
         """
         if not self._fitted:
-            print("  Pipeline not fitted — returning flat equity.")
+            print("  Pipeline not fitted -- holding cash.")
             return pd.Series(self.total_capital, index=test_prices.index), None
 
         k       = self.k
-        capital = self.total_capital          # set by walk_forward runner before call
+        capital = self.total_capital   # runner sets pipeline.total_capital before calling
 
-        dates = test_prices.index
-        equity = [capital]
-        equity_dates = [dates[0]]
+        # -------------------------------------------------------------- #
+        # Build price series with warmup prefix prepended.
+        # Warmup rows are only used for feature lookback; equity tracking
+        # starts at test_prices.index[0].
+        # -------------------------------------------------------------- #
+        if self._warmup_prices is not None:
+            shared_cols        = test_prices.columns.intersection(self._warmup_prices.columns)
+            prices_with_warmup = pd.concat([
+                self._warmup_prices[shared_cols],
+                test_prices[shared_cols],
+            ])
+            prices_with_warmup = prices_with_warmup[
+                ~prices_with_warmup.index.duplicated(keep="last")
+            ]
+        else:
+            prices_with_warmup = test_prices
 
-        next_day_returns = test_prices.pct_change(1)   # precompute
+        test_dates       = test_prices.index
+        next_day_returns = test_prices.pct_change(1)
 
-        for i, date in enumerate(dates[:-1]):           # can't trade on last day
-            next_date = dates[i + 1]
+        equity       = [capital]
+        equity_dates = [test_dates[0]]
+        days_traded  = 0
+        days_cash    = 0
 
-            X_pred, tickers = _build_predict_matrix(test_prices, date)
+        for i, date in enumerate(test_dates[:-1]):
+            next_date = test_dates[i + 1]
+
+            X_pred, tickers = _build_predict_matrix(prices_with_warmup, date)
+
             if X_pred.empty or len(tickers) < 2 * k:
-                # Not enough stocks — hold cash
                 equity.append(equity[-1])
                 equity_dates.append(next_date)
+                days_cash += 1
                 continue
 
-            probs = self._predict_proba_from_matrix(X_pred.values)
+            probs   = self._ensemble_proba(X_pred.values)
             ranking = pd.Series(probs, index=tickers).sort_values(ascending=False)
 
             long_stocks  = ranking.index[:k].tolist()
             short_stocks = ranking.index[-k:].tolist()
 
-            # Dollar-neutral: allocate capital / (2k) per position
-            pos_size = equity[-1] / (2 * k)
+            # Confidence gate: censor uncertain days (paper's middle-censoring intent)
+            if ranking.iloc[:k].mean() < self.min_prob_threshold:
+                equity.append(equity[-1])
+                equity_dates.append(next_date)
+                days_cash += 1
+                continue
 
-            # Realise returns: long gains if stock goes up, short gains if goes down
-            day_ret = next_day_returns.loc[next_date]
+            # Dollar-neutral: equal position size across all 2k legs
+            pos_size  = equity[-1] / (2 * k)
+            day_ret   = next_day_returns.loc[next_date]
 
             long_pnl  = sum(pos_size * day_ret.get(t, 0.0) for t in long_stocks)
             short_pnl = sum(-pos_size * day_ret.get(t, 0.0) for t in short_stocks)
 
             new_capital = equity[-1] + long_pnl + short_pnl
-            equity.append(max(new_capital, 0.0))        # floor at zero
+            equity.append(max(new_capital, 0.0))
             equity_dates.append(next_date)
+            days_traded += 1
+
+        total_days = days_traded + days_cash
+        if total_days > 0:
+            print(
+                f"  Traded {days_traded}/{total_days} days "
+                f"({days_traded / total_days:.1%} active, "
+                f"threshold={self.min_prob_threshold}, k={k})"
+            )
 
         return pd.Series(equity, index=equity_dates), None

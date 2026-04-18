@@ -3,21 +3,15 @@ ml_based_tests.py
 =================
 Companion to cointegration_based_tests.py.
 
-Runs walk-forward backtests for all four ML model variants through the
-**shared** backtests.walk_forward_pipeline.run_walk_forward_backtest() runner,
-the same runner used by the cointegration strategies.
+Runs walk-forward backtests for all ML model variants through the shared
+backtests.walk_forward_pipeline.run_walk_forward_backtest() runner.
 
-Strategies evaluated:
-    ML-DNN       — deep neural network only
-    ML-GBT       — gradient-boosted trees only
-    ML-RAF       — random forest only
-    ML-Ensemble  — equal-weight average of DNN + GBT + RAF  (paper's primary result)
+Grid:
+    models : DNN-only, GBT-only, RAF-only, Ensemble (DNN+GBT+RAF)
+    k      : 5, 10
 
-All results are printed in the same PrettyTable format as cointegration_based_tests.py,
+All results printed in the same PrettyTable format as cointegration_based_tests.py,
 sorted by final capital descending, and plotted via plot_equity_curves().
-
-To compare ML vs cointegration side-by-side, merge the two equity_dicts and call
-plot_equity_curves() on the combined dict (see commented block at the bottom).
 """
 
 from config.universe import NIFTY100
@@ -27,37 +21,36 @@ from cointegration_based_tests import plot_equity_curves
 
 from ml_based.strategy.pipeline import MLPipeline
 from prettytable import PrettyTable
-
-import numpy as np
-import random
-
-# Set seeds for reproducibility
-np.random.seed(42)
-random.seed(42)
+import itertools
 
 
-def run_backtest_ml(prices, total_capital=100.0, k=10, models=("dnn", "gbt", "raf")):
+def run_backtest_ml(prices, total_capital=100.0, k=10, models=("dnn", "gbt", "raf"), min_prob_threshold=0.55):
     """
-    Thin wrapper: constructs an MLPipeline and hands it to the shared runner.
+    Construct an MLPipeline and run it through the shared walk-forward runner.
 
     Parameters
     ----------
-    prices        : pd.DataFrame -- daily close prices
-    total_capital : float        -- starting capital
-    k             : int          -- number of long / short positions per day
-    models        : tuple        -- subset of ("dnn", "gbt", "raf") to include
+    prices             : pd.DataFrame  -- daily close prices
+    total_capital      : float         -- starting capital
+    k                  : int           -- long/short leg size
+    models             : tuple         -- base learners to include
+    min_prob_threshold : float         -- daily confidence gate (0.5 = disabled)
 
     Returns
     -------
     (equity_series, metrics_dict)
     """
-    pipeline = MLPipeline(k=k, total_capital=total_capital, models=models)
+    pipeline = MLPipeline(
+        k=k,
+        total_capital=total_capital,
+        models=models,
+        min_prob_threshold=min_prob_threshold,
+    )
     return run_walk_forward_backtest(prices, pipeline=pipeline)
 
 
 if __name__ == "__main__":
     tickers = NIFTY100
-    k = 10          # paper default; set to 5 to match cointegration pipeline's k=5
     capital = 100.0
 
     prices = download_price_data(tickers)
@@ -66,30 +59,34 @@ if __name__ == "__main__":
     print("ML STATISTICAL ARBITRAGE -- WALK-FORWARD BACKTEST (Nifty 100)")
     print("=" * 70)
 
-    # ------------------------------------------------------------------ #
-    # Run all four model variants
-    # ------------------------------------------------------------------ #
-    configs = [
-        ("ML-DNN",      ("dnn",)),
-        ("ML-GBT",      ("gbt",)),
-        ("ML-RAF",      ("raf",)),
-        ("ML-Ensemble", ("dnn", "gbt", "raf")),
+    # Grid: 4 model configs x 2 k values = 8 runs
+    model_configs = [
+        ("DNN",      ("dnn",)),
+        ("GBT",      ("gbt",)),
+        ("RAF",      ("raf",)),
+        ("Ensemble", ("dnn", "gbt", "raf")),
     ]
+    k_values = [5, 10]
 
     equity_dict    = {}
     metrics_mapping = {}
 
-    for label, models in configs:
-        print(f"\nRunning backtest for: {label}")
+    for (model_label, models), k in itertools.product(model_configs, k_values):
+        label = f"ML-{model_label}-k{k}"
+        print(f"\nRunning: {label}")
         equity, metrics = run_backtest_ml(
-            prices, total_capital=capital, k=k, models=models
+            prices,
+            total_capital=capital,
+            k=k,
+            models=models,
+            min_prob_threshold=0.55,
         )
         equity_dict[label]     = equity
         metrics_mapping[label] = metrics
 
-    # ------------------------------------------------------------------ #
-    # Print results table -- sorted by final capital descending
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    # Results table sorted by final capital descending
+    # ------------------------------------------------------------------
     table = PrettyTable()
     table.field_names = [
         "Strategy", "Final Capital", "Max Drawdown",
@@ -117,16 +114,14 @@ if __name__ == "__main__":
     print("\n")
     print(table)
 
-    # ------------------------------------------------------------------ #
-    # Equity curves
-    # ------------------------------------------------------------------ #
     plot_equity_curves(equity_dict)
 
     print("\nWalk-Forward ML Backtest Completed.")
 
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
     # Side-by-side comparison with cointegration strategies
-    # Run cointegration_based_tests.py first, then uncomment:
-    # ------------------------------------------------------------------ #
+    # Run cointegration_based_tests.py first to populate coint_equity_dict,
+    # then uncomment:
+    # ------------------------------------------------------------------
     # combined = {**equity_dict, **coint_equity_dict}
     # plot_equity_curves(combined)
