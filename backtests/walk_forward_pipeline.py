@@ -34,8 +34,9 @@ def run_walk_forward_backtest(prices, pipeline):
     ]
     
     all_equity = []
-    
     benchmark_returns_list = []
+    
+    sub_period_metrics = []
 
     initial_capital = pipeline.total_capital
     current_capital = initial_capital
@@ -74,6 +75,21 @@ def run_walk_forward_backtest(prices, pipeline):
         equity_series, _ = pipeline.backtest(test_prices, plot=False)
         all_equity.append(equity_series)
         current_capital = equity_series.iloc[-1]
+        
+        # Calculate sub-period metrics
+        period_returns = equity_series.pct_change().dropna()
+        period_bench_ret = bench_ret.reindex(period_returns.index).fillna(0)
+        
+        sub_metrics = {
+            'period': f"{end_in_start_ood} to {end_ood}",
+            'final_capital': current_capital,
+            'max_drawdown': max_drawdown(equity_series),
+            'sharpe_ratio': sharpe_ratio(period_returns),
+            'annual_volatility': compute_annual_volatility(period_returns),
+            'alpha': compute_alpha_beta(period_returns, period_bench_ret)[0],
+            'beta': compute_alpha_beta(period_returns, period_bench_ret)[1]
+        }
+        sub_period_metrics.append(sub_metrics)
             
     # Combine walk-forward pieces 
     # Drop duplicates at boundaries
@@ -98,7 +114,12 @@ def run_walk_forward_backtest(prices, pipeline):
         'sharpe_ratio': sr,
         'alpha': alpha,
         'beta': beta,
-        'annual_volatility': vol
+        'annual_volatility': vol,
+        'sub_periods': sub_period_metrics
     }
     
+    print("\n--- Sub-Period Performance Summary ---")
+    for cp in sub_period_metrics:
+        print(f"Period: {cp['period']} | Final Capital: ${cp['final_capital']:.2f} | Sharpe: {cp['sharpe_ratio']:.2f} | MDD: {cp['max_drawdown']:.2%} | Vol: {cp['annual_volatility']:.2%}")
+        
     return total_portfolio_equity, metrics_dict
