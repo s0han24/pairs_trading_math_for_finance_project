@@ -165,13 +165,20 @@ def _make_raf():
         random_state=1,
     )
 
-def _make_xgb():
-    """XGBoost with same hyperparameters as GBT."""
+def _make_xgb(n_estimators=100, max_depth=3, learning_rate=0.1,
+              subsample=1.0, colsample_bytree=1.0, gamma=0.0,
+              min_child_weight=1, reg_alpha=0.0, reg_lambda=1.0):
+    """XGBoost classifier with fully tuneable hyperparameters."""
     return XGBClassifier(
-        n_estimators=100,
-        max_depth=3,
-        learning_rate=0.1,
-        max_features=15,
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        learning_rate=learning_rate,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        gamma=gamma,
+        min_child_weight=min_child_weight,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
         use_label_encoder=False,
         eval_metric="logloss",
         random_state=1,
@@ -206,11 +213,31 @@ class MLPipeline:
         total_capital=100.0,
         models=("dnn", "gbt", "raf"),
         min_prob_threshold=0.55,
+        # XGBoost-specific hyperparameters
+        xgb_n_estimators=100,
+        xgb_max_depth=3,
+        xgb_learning_rate=0.1,
+        xgb_subsample=1.0,
+        xgb_colsample_bytree=1.0,
+        xgb_gamma=0.0,
+        xgb_min_child_weight=1,
+        xgb_reg_alpha=0.0,
+        xgb_reg_lambda=1.0,
     ):
-        self.k                  = k
-        self.total_capital      = total_capital
-        self.model_names        = models
-        self.min_prob_threshold = min_prob_threshold
+        self.k                   = k
+        self.total_capital       = total_capital
+        self.model_names         = models
+        self.min_prob_threshold  = min_prob_threshold
+        # XGB params stored for use in fit()
+        self.xgb_n_estimators    = xgb_n_estimators
+        self.xgb_max_depth       = xgb_max_depth
+        self.xgb_learning_rate   = xgb_learning_rate
+        self.xgb_subsample       = xgb_subsample
+        self.xgb_colsample_bytree = xgb_colsample_bytree
+        self.xgb_gamma           = xgb_gamma
+        self.xgb_min_child_weight = xgb_min_child_weight
+        self.xgb_reg_alpha       = xgb_reg_alpha
+        self.xgb_reg_lambda      = xgb_reg_lambda
 
         self._dnn            = None
         self._gbt            = None
@@ -303,14 +330,32 @@ class MLPipeline:
                 print("done.")
             
         if "xgb" in self.model_names:
-            xgb_key = f"{cache_key_prefix}_xgb"
+            # Cache key includes all XGB hyperparams so different trials never share models
+            xgb_hp_tag = (
+                f"ne{self.xgb_n_estimators}_d{self.xgb_max_depth}"
+                f"_lr{self.xgb_learning_rate:.4f}_ss{self.xgb_subsample:.3f}"
+                f"_cb{self.xgb_colsample_bytree:.3f}_g{self.xgb_gamma:.4f}"
+                f"_mcw{self.xgb_min_child_weight}_a{self.xgb_reg_alpha:.4f}"
+                f"_l{self.xgb_reg_lambda:.4f}"
+            )
+            xgb_key = f"{cache_key_prefix}_xgb_{xgb_hp_tag}"
             if xgb_key in MLPipeline._model_cache:
                 print("  Using cached XGB ...", end=" ", flush=True)
                 self._xgb = MLPipeline._model_cache[xgb_key]
                 print("done.")
             else:
                 print("  Training XGB ...", end=" ", flush=True)
-                self._xgb = _make_xgb()
+                self._xgb = _make_xgb(
+                    n_estimators=self.xgb_n_estimators,
+                    max_depth=self.xgb_max_depth,
+                    learning_rate=self.xgb_learning_rate,
+                    subsample=self.xgb_subsample,
+                    colsample_bytree=self.xgb_colsample_bytree,
+                    gamma=self.xgb_gamma,
+                    min_child_weight=self.xgb_min_child_weight,
+                    reg_alpha=self.xgb_reg_alpha,
+                    reg_lambda=self.xgb_reg_lambda,
+                )
                 self._xgb.fit(X_arr, y.values)
                 MLPipeline._model_cache[xgb_key] = self._xgb
                 print("done.")
