@@ -96,9 +96,9 @@ if __name__ == "__main__":
             total_capital=capital,
             k=k,
             order=order,
-            lookback=252,  # 1 year of trading days for ARIMA fits
+            lookback=60,  # 2-3 months of trading days for each ARIMA fit
             min_ret_threshold=0.0,
-            refit_every=1,
+            refit_every=5,
         )
         equity_dict[label]     = equity
         metrics_mapping[label] = metrics
