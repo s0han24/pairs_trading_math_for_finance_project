@@ -2,8 +2,6 @@
 
 This repository implements a systematic statistical arbitrage (pairs trading) pipeline deployed on the **NIFTY100 universe**. It focuses heavily on statistical cointegration, rolling window backtests, and alternative z-score construction paradigms (simple moving average vs. Ornstein-Uhlenbeck processes).
 
-**Goal of this README**: Provide absolute clarity regarding the architecture, math, data structures, and assumptions embedded into the python files so that an LLM or developer can infer the system's exact state without opening the source code. In case of additions, please update them here.
-
 ---
 
 ## 1. Project Overview & Architecture
@@ -112,13 +110,62 @@ Five simple baseline strategies are implemented to benchmark the cointegration p
 | Risk-free rate | **6.5% p.a.** | Indian T-bill proxy; used only by the 40-60 baseline; converted to daily as $(1.065)^{1/252} - 1$ |
 | Benchmark | **^NSEI (NIFTY 50)** | All alpha/beta computed against the NIFTY 50 index daily returns |
 
+## 7. Prediction based Approaches
+
+This section details the machine learning and time-series forecasting pipelines used for statistical arbitrage.
+
+### 7.1 ML-Based Pipeline (Krauss et al. 2016)
+Located in `prediction_based/ml_based/pipeline.py`, this approach is a faithful implementation of the strategy proposed by Krauss, Do & Huck (2017) [1].
+
+#### Feature Engineering & Labeling
+- **Features**: 31 lagged return features $R(m)$ for $m \in \{1, \dots, 20, 40, 60, \dots, 240\}$.
+- **Labeling**: Binary classification. A stock is labeled $1$ if its next-day return outperforms the cross-sectional median of all stocks in the universe, and $0$ otherwise.
+- **Scaling**: Features are standardized using a `StandardScaler` fitted on the training window.
+
+#### Model Architectures
+The framework ensembles four types of classifiers:
+1. **Deep Neural Network (DNN)**: A multi-layer perceptron with architecture 31-31-10-5 (as per paper topology).
+2. **Gradient Boosted Trees (GBT)**: 100 trees with depth 3.
+3. **Random Forest (RAF)**: 1000 trees with depth 20.
+4. **XGBoost (XGB)**: Added as an alternative to GBT with similar hyperparameters. Hyperparameter tuning using Optuna was performed for XGBoost to achieve a sharpe of ~2.2! Which really shows how well these approaches work.
+
+Note that transaction costs are ignored for metric calculations throughout the project. 
+
+#### Trading Logic & Confidence Gating
+- **Ensembling**: Predictions are generated as the equal-weighted average of the probabilities $P(outperform)$ from all fitted models.
+- **Ranking**: Stocks are ranked by their ensembled probability. The strategy goes **Long top-k** and **Short bottom-k** (dollar-neutral).
+- **Confidence Gate (Middle-Censoring)**: To avoid trading on low-conviction signals, the strategy only enters positions if the average probability of the top-k stocks exceeds a threshold (e.g., `0.55`). This effectively "censors" the uncertain middle of the ranking. Set this to zero to disable the gating mechanism. 
+
+---
+
+### 7.2 ARIMA Baseline
+Located in `prediction_based/arima/pipeline.py`, this acts as a naive time-series baseline to benchmark the ML approaches.
+
+- **Model**: A rolling ARIMA(2, 0, 2) model is fitted per-stock on log-returns using a 252-day lookback window.
+- **Forecast**: Generates 1-step-ahead point forecasts for next-day log-returns.
+- **Execution**: Ranks stocks by forecast returns; long top-k, short bottom-k.
+- **Gating**: Only trades if the mean forecast return of the top-k stocks is positive (`min_ret_threshold > 0`).
+
+---
+
+### 7.3 Shared "Warmup" Logic
+Both prediction pipelines implement a **Warmup Prefix** mechanism. To ensure the strategy can trade from day 1 of the test window, the last 240 days of the training window are prepended to the test data. This prevents a "cold-start" period where the models would otherwise wait for enough history to generate the first set of features.
+
+---
+
+### 7.4 MOMENT-based ML Pipeline (Future Work)
+
+We also implemented a pipeline in `prediction_based/ml_based/moment_pipeline.py` that integrates the **MOMENT (Foundation Model)** with the ML strategy. However, this implementation is currently **non-working** and serves as a placeholder for future research.
+
+#### Architecture
+This pipeline follows the same ensemble structure as the standard ML approach but replaces the custom-trained models with a fine-tuned MOMENT foundation model. The architecture is defined in `prediction_based/ml_based/model_configs.py`.
+
+#### Current Status
+**DO NOT USE**. This is still under development and currently non-working. It serves as a placeholder for future work.
 
 
-## Future Work
-- Implement more correlation statistics
-- Add additional risk measure calculations
-- ML or DL based approaches
-- Extend the cointegration approach to include stochastic modeling based approaches such as:
-    1. Time-varying OU
-    2. Kalman Filter
-- Try DRL for position generation
+## References
+
+\[1\] Christopher Krauss, Xuan Anh Do, Nicolas Huck, Deep neural networks, gradient-boosted trees, random forests: Statistical arbitrage on the S&P 500, European Journal of Operational Research, 2017
+\[2\] MOMENT: A Family of Open Time-series Foundation Models
+\[3\] Caldeira, João and Moura, Guilherme Valle, Selection of a Portfolio of Pairs Based on Cointegration: A Statistical Arbitrage Strategy (January 4, 2013).
